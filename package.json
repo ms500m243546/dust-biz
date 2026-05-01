@@ -1,0 +1,9 @@
+{
+  "name": "dustops-ai",
+  "version": "0.0.0",
+  "private": true,
+  "description": "DustOps AI - production-preserving dust-risk optimization platform for mines",
+  "scripts": {
+    "agent-check": "node scripts/agent-check.js"
+  }
+}
