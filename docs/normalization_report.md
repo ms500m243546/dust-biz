@@ -8,8 +8,79 @@ phase.
 
 ## Active phase
 
-**Phase F - Source Attribution.**
+**Phase G - Intervention Simulation.**
 Status: pending plan/approval. See `PLAN.md`.
+
+**Phase F - Source Attribution.**
+Status: complete (2026-05-01). All four sub-steps shipped.
+- F.1: `dust_events` ORM/schema/repo + creation paths.
+  `DustEventCreate` / `DustEventSchema` (with `event_source` enum:
+  model_alert / manual_entry / threshold_trigger);
+  `DustEventRepository` with `EVT-YYYYMMDD-NNN` IDs resetting per
+  UTC day. `app/domain/dust_events.py` exposes
+  `record_manual_event` (G12 operator entry) and
+  `trigger_events_from_forecasts` (sensor-targeted-only sweep over
+  recent `DustPrediction` rows above the configurable
+  `breach_threshold`, idempotent per (sensor, UTC day) -
+  re-crossing forecasts append to `linked_prediction_ids` rather
+  than spawning duplicates). `POST /api/v1/dust-events`,
+  `GET /api/v1/dust-events`, `GET /.../{event_id}`,
+  `POST /.../from-forecast`. 186 tests.
+- F.2: `SourceAttribution` schema/ORM/repo. `ProbableSource` +
+  `SourceAttributionSchema` with overall `confidence`,
+  `model_version`, and an `evidence_fields` dict for reviewer
+  reconstruction. `SourceAttribution` ORM matching
+  `data-contracts.md` line 159-166 (append-only, keyed on
+  `dust_event_id` so re-running attribution preserves history).
+  `SourceAttributionRepository` with `ATTR-YYYYMMDD-NNN` IDs.
+  `validate-safety` now tracks 3 schemas (DustForecast,
+  ForecastTarget, SourceAttribution). 194 tests.
+- F.3: Rule-based attribution model + orchestrator.
+  `app/models/attribution/rules_baseline.py` implementing
+  `SourceAttributionModel` per `model-contracts.md` -
+  `source_attribution_rules_v0.1.0` combining wind-aligned spatial
+  proximity, activity-time / spike-time correlation, and source
+  baseline dust potential into ranked `probable_sources` with
+  per-source confidence + reason. `external_background` floor
+  always present so the regional-baseline lane stays visible.
+  Empty / collapsed-score paths return a single `Unknown` entry
+  per the S7 failure mode. `app/domain/attribution.py:attribute_event`
+  composes the candidate list (every zone in the affected
+  station's mine) with measured inputs - 30-min activity
+  intensity, station PM10 rise ratio, latest weather wind
+  direction (terrain-aware bearing deferred to D3-R3). Each
+  call lands a new attribution row keyed on `dust_event_id` so
+  history is preserved. 209 tests.
+- F.4: API + smoke + contract index. `POST /api/v1/attributions/for-event/{event_id}`
+  (compute-on-read with persist), `GET /.../for-event/{event_id}`
+  (latest), `GET /.../for-event/{event_id}/history`,
+  `GET /api/v1/attributions` (recent, smoke happy path).
+  Promoted both `dust-events` and `attributions` to REQUIRED in
+  smoke (13 endpoints, was 11). `PHASE_F` block added to
+  `scripts/lib/contract_index.js` (DustEvent, SourceAttribution +
+  DustEventRepository, SourceAttributionRepository). Phase
+  advanced to G. 217 tests.
+
+Open risks introduced in Phase F:
+- F1-R1 (low): threshold-trigger sweep is manual-call only;
+  background scheduling waits for Phase K.
+- F2-R1 (low): `evidence_fields` JSON shape unenforced; tighten
+  if a downstream consumer depends on specific keys.
+- F3-R1 (low): `_wind_angle_offset` returns 0 when wind data
+  exists (no terrain-aware bearing yet, D3-R3); the rule still
+  ranks correctly via the other two signals but per-source
+  proximity is uniform until GeoJSON lands.
+- F3-R2 (medium-latent): rule coefficients (proximity weight,
+  factor table, score formula) are uncalibrated; revisit alongside
+  D3-R1 / E2-R1 when ground truth is available in K.
+- F4-R1 (low): attribution endpoints unauthenticated; same posture
+  as forecast / admin endpoints, deferred to Phase I.
+
+Closed during Phase F: none of the prior risks fully closed.
+
+`validate-safety` tracks 3 safety-relevant schemas with all
+required guardrail fields present. `validate-boundaries` clean
+across 54 Python files in 5 layered directories.
 
 **Phase E - Forecasting MVP.**
 Status: complete (2026-05-01). All four sub-steps shipped.

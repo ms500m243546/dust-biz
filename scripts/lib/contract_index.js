@@ -43,19 +43,26 @@ const PHASE_E = [
   { entity: 'DustPrediction',       schemaModule: 'app.schemas.forecasts',     schemaClass: 'DustForecastSchema',    model: 'DustPrediction' },
 ];
 
-const REPOSITORIES = [
-  { name: 'SensorReadingRepository',     module: 'app.storage.repositories.sensor_readings' },
-  { name: 'WeatherReadingRepository',    module: 'app.storage.repositories.weather_readings' },
-  { name: 'EquipmentActivityRepository', module: 'app.storage.repositories.equipment_activity' },
-  { name: 'IngestErrorRepository',       module: 'app.storage.repositories.ingest_errors' },
-  { name: 'SiteConfigRepository',        module: 'app.storage.repositories.site_config' },
-  { name: 'ZoneRepository',              module: 'app.storage.repositories.zones' },
-  { name: 'HaulRoadSegmentRepository',   module: 'app.storage.repositories.haul_road_segments' },
-  { name: 'MineStateSnapshotRepository', module: 'app.storage.repositories.mine_state' },
-  { name: 'FeatureRepository',           module: 'app.storage.repositories.features' },
-  { name: 'DustPredictionRepository',    module: 'app.storage.repositories.forecasts' },
+const PHASE_F = [
+  { entity: 'DustEvent',            schemaModule: 'app.schemas.dust_events',   schemaClass: 'DustEventSchema',           model: 'DustEvent' },
+  { entity: 'SourceAttribution',    schemaModule: 'app.schemas.attributions',  schemaClass: 'SourceAttributionSchema',   model: 'SourceAttribution' },
 ];
 
-const ENTITIES = [...PHASE_B4, ...PHASE_C, ...PHASE_D, ...PHASE_E];
+const REPOSITORIES = [
+  { name: 'SensorReadingRepository',         module: 'app.storage.repositories.sensor_readings' },
+  { name: 'WeatherReadingRepository',        module: 'app.storage.repositories.weather_readings' },
+  { name: 'EquipmentActivityRepository',     module: 'app.storage.repositories.equipment_activity' },
+  { name: 'IngestErrorRepository',           module: 'app.storage.repositories.ingest_errors' },
+  { name: 'SiteConfigRepository',            module: 'app.storage.repositories.site_config' },
+  { name: 'ZoneRepository',                  module: 'app.storage.repositories.zones' },
+  { name: 'HaulRoadSegmentRepository',       module: 'app.storage.repositories.haul_road_segments' },
+  { name: 'MineStateSnapshotRepository',     module: 'app.storage.repositories.mine_state' },
+  { name: 'FeatureRepository',               module: 'app.storage.repositories.features' },
+  { name: 'DustPredictionRepository',        module: 'app.storage.repositories.forecasts' },
+  { name: 'DustEventRepository',             module: 'app.storage.repositories.dust_events' },
+  { name: 'SourceAttributionRepository',     module: 'app.storage.repositories.attributions' },
+];
 
-module.exports = { PHASE_B4, PHASE_C, PHASE_D, PHASE_E, ENTITIES, REPOSITORIES };
+const ENTITIES = [...PHASE_B4, ...PHASE_C, ...PHASE_D, ...PHASE_E, ...PHASE_F];
+
+module.exports = { PHASE_B4, PHASE_C, PHASE_D, PHASE_E, PHASE_F, ENTITIES, REPOSITORIES };
