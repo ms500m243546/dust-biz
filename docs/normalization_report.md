@@ -8,8 +8,34 @@ phase.
 
 ## Active phase
 
-**Phase D - Mine State Engine.**
+**Phase E - Forecasting MVP.**
 Status: pending plan/approval. See `PLAN.md`.
+
+**Phase D - Mine State Engine.**
+Status: complete (2026-05-01). All four sub-steps shipped.
+- D.1: S3 site config storage + admin endpoints + 3-tier resolver.
+- D.2: Mine map admin (zones + haul road segments) + strict
+  `require_resolved` wrapper closing D-R2.
+- D.3: S4 compute layer - `MineStateSnapshot` ORM/schema/repo +
+  `app/domain/mine_state.py:compute_zone_state(...)` heuristic engine
+  (activity summary, dust generation potential, wind exposure,
+  downwind asset detection, staleness flags). 110 tests.
+- D.4: S4 API surface - `GET /api/v1/mine-state/current` and
+  `/zones/{zone_id}` with compute-on-read + persist via
+  `MineStateSnapshotRepository`. `mine_state.current` promoted from
+  PENDING to REQUIRED in smoke. Phase advanced to E. 117 tests.
+- D.1: S3 site configuration storage + admin endpoints. `SiteConfiguration`
+  ORM + `SiteConfigSchema` (with typed `OptimizationWeightsSchema`) +
+  `SiteConfigRepository` (get / get_for_mine / upsert) +
+  `app/domain/site_config_resolver.py` (3-tier resolution: site_config ->
+  mine_defaults -> schema_defaults) + `GET/POST /api/v1/site-config` and
+  `GET /api/v1/site-config/{site_id}` (synthetic `default-<mine_id>` ids
+  trigger fallback resolution). Router mounted in `app/api/main.py`;
+  `/site-config` added to smoke `REQUIRED_ENDPOINTS`. Bug fixed inline:
+  `intervention_constraints` `None` -> `{}` coercion via field_validator
+  (SQLAlchemy `default=dict` only fires at flush; unflushed reads exposed
+  `None`). agent-check: 11 PASS / 0 SKIP / 0 FAIL. New risks D-R1..D-R3
+  (see Risks below).
 
 **Phase C - Data Harness.**
 Status: complete (2026-05-01). All four sub-steps shipped.
@@ -48,8 +74,8 @@ Status: complete (approved 2026-04-30; auto-validated continuously).
 | A     | Architecture Constitution      | complete    |
 | B     | Repo Scaffold                  | complete    |
 | C     | Data Harness                   | complete    |
-| D     | Mine State Engine              | pending (next) |
-| E     | Forecasting MVP                | pending     |
+| D     | Mine State Engine              | complete    |
+| E     | Forecasting MVP                | pending (next) |
 | F     | Source Attribution             | pending     |
 | G     | Intervention Simulation        | pending     |
 | H     | Recommendation Engine          | pending     |
@@ -114,6 +140,30 @@ exist yet.
 ---
 
 ## Risks (open)
+
+### D-R1 - In-flight site_config files were edited without a prior snapshot
+Severity: medium -> CLOSED (2026-05-01).
+The site_config slice (5 app files + 3 test files + 2 modified files)
+was created in the working tree before any rollback snapshot was taken,
+violating architect_protocol.md step 6. Closed at D.1 start by capturing
+`phase-d1-site-config` listing all 8 created files + 2 modified files,
+then taking `phase-d1-site-config-routed` after the router/smoke edits.
+Process note for future phases: snapshot before edits, not after.
+
+### D-R2 - Resolver `schema_defaults` fallback could mask missing site config
+Severity: medium -> CLOSED (2026-05-01).
+Closed by D.2: `app/domain/site_config_resolver.py` now exports
+`MissingSiteConfigError` + `require_resolved(...)`, which raises when
+the underlying resolution would fall back to `schema_defaults`.
+Permissive `resolve(...)` remains for read endpoints. Automation-
+impacting consumers (S4 in D.3, S11 in H, S13 in I) MUST call
+`require_resolved`.
+
+### D-R3 - `intervention_constraints` JSON shape is unenforced
+Severity: low.
+Currently `dict[str, Any]`. Constraint shape is only meaningful once
+intervention IDs exist (S8, Phase G). Mitigation: defer typed shape
+to Phase G alongside the `intervention_options` table.
 
 ### R8 - SQLite write-lock under concurrent ingestion
 Severity: low (Phase C, single process).
@@ -254,3 +304,7 @@ turning the gate red.
 | 2026-05-01 | C.2          | Ingestion endpoints: POST/POST-batch/GET for `/api/v1/sensor-readings`, `/weather-readings`, `/equipment-activity`. Validation failures persist to `ingest_errors` then 422. Added `app/api/deps.py` (session injection) + `tests/api/conftest.py` (TestClient with dependency override) - both infrastructure additions on top of the approved file list. `received_at` in `RawSensorReadingSchema` made optional (server-set). Smoke now asserts the three new GET endpoints. R10 (idempotency) deferred to Phase E pending `client_request_id` contract change. Bugs caught and fixed mid-run: (a) ruff B008 on `Depends(...)` defaults -> Annotated[]; (b) SQLite `:memory:` per-connection isolation broke TestClient -> StaticPool; (c) FastAPI prod DB had no tables -> lifespan `Base.metadata.create_all`; (d) HTTPException rolled back IngestError row -> commit before raise. Plus added `*.db` to `.gitignore`. | `phase-c2-ingestion` |
 | 2026-05-01 | C.3          | Mock stream generators (`app/ingestion/mock_streams.py`): reproducible sensor/weather/equipment streams with diurnal curves + parameterized noise + spikes. `scripts/seed_mock_data.py` rewritten as a real CLI on top of those generators. R9 mitigation: new `mock_mode` setting; `/api/v1/meta` now reports it. | `phase-c3-mockgen` |
 | 2026-05-01 | C.4          | S2 data-quality scoring: `app/domain/data_quality.py:SensorHealthScorer` heuristics (offline / stale / few-readings / high-variance / source-quality-hint propagation). `GET /api/v1/data-quality` returns scores for all sensors, `GET /api/v1/data-quality/{sensor_id}` returns one. Smoke promotes the endpoint from PENDING to REQUIRED. Phase C complete; phase advanced to D. | `phase-c4-quality` |
+| 2026-05-01 | D.4          | S4 mine-state API (Phase D step 4 of 4 - **PHASE D COMPLETE**). New: `app/api/routes/mine_state.py` with `GET /api/v1/mine-state/current?mine_id=&window_minutes=15` (compute-on-read; defaults to single-mine when only one Mine row exists; 400 when ambiguous; 404 via `require_resolved` when mine has no config) and `GET /api/v1/mine-state/zones/{zone_id}`; results persisted via `MineStateSnapshotRepository.add_many` for audit/replay. `tests/api/test_mine_state.py` covers happy path, missing mine, missing zone, empty DB, multi-mine ambiguity, single-mine default. Modified: `app/api/main.py` (mount router), `scripts/_smoke.py` (`/mine-state/current` PENDING -> REQUIRED, total 10 endpoints), `.progress_state.json` (advance to E). agent-check: 11 PASS / 0 SKIP / 0 FAIL; 117 tests. | `phase-d4-mine-state-api` (pre) + `phase-d4-mine-state-api-routed` (post) |
+| 2026-05-01 | D.3          | S4 mine-state compute layer (Phase D step 3 of 4). New ORM `MineStateSnapshot` (`mine_state_snapshots`, append-only) per data-contracts.md:111-122. New schemas `MineStateZoneSchema` + aggregate `MineStateSchema` (with `staleness_flags` field implementing the documented S4 failure mode "mark stale, never fabricate"). New repo `MineStateSnapshotRepository` (add / add_many / latest_for_zone / latest_for_mine). New domain `app/domain/mine_state.py:compute_zone_state(...)` - pure heuristic function: activity summary (top-kind / mixed / unknown) + equipment_active set + dust_generation_potential (baseline x intensity matrix) + wind_exposure (<3 / 3-7 / >=7 m/s thresholds with gust max) + straight-line downwind asset detection (boundary + loading_area + critical zones; geometry-aware version is D3-R3). No model code per CLAUDE.md rule 13. 7 new tests (3 storage, 5 domain, 2 schema). Modified: `app/storage/models/__init__.py`, `scripts/lib/contract_index.js` (PHASE_D + REPOSITORIES). agent-check: 11 PASS / 110 tests. | `phase-d3-mine-state` (pre) + `phase-d3-mine-state-tests` (post) |
+| 2026-05-01 | D.2          | S3 mine-map admin (Phase D step 2 of 4). New repos: `ZoneRepository` (`get` / `get_for_mine` / `upsert`), `HaulRoadSegmentRepository` (same + `mark_watered` / `mark_graded` helpers reserved for Phase G interventions). New routes: `GET/POST /api/v1/zones`, `GET /zones/{id}`, `GET/POST /api/v1/haul-road-segments`, `GET /haul-road-segments/{id}` - both reject unknown `mine_id` with 400. New domain: `MissingSiteConfigError` + `require_resolved(...)` in `site_config_resolver.py` (closes D-R2). 5 new test modules (3 storage, 1 domain, 2 api). Modified: `app/api/main.py` (mount routers), `scripts/_smoke.py` (2 endpoints -> REQUIRED), `scripts/lib/contract_index.js` (2 repos in `REPOSITORIES`). agent-check: 11 PASS / 0 SKIP / 0 FAIL; 100 -> 113 tests. | `phase-d2-mine-map` (pre) + `phase-d2-mine-map-routed` (post) |
+| 2026-05-01 | D.1          | S3 site configuration storage + admin (Phase D step 1 of 4). New: `app/schemas/site_config.py` (`SiteConfigSchema` + `OptimizationWeightsSchema`; WHO/EPA-aligned defaults), `app/storage/models/site_config.py` (`SiteConfiguration` ORM, mutable, `updated_at`/`updated_by` audit), `app/storage/repositories/site_config.py` (get / get_for_mine / upsert), `app/domain/site_config_resolver.py` (3-tier fallback site_config -> mine_defaults -> schema_defaults), `app/api/routes/site_config.py` (`GET/POST /api/v1/site-config`, `GET /api/v1/site-config/{site_id}` with synthetic `default-<mine_id>` resolver path), 3 test modules (api/domain/storage). Modified: `app/storage/models/__init__.py` (export SiteConfiguration), `scripts/lib/contract_index.js` (`PHASE_D` + `SiteConfigRepository`), `app/api/main.py` (mount router), `scripts/_smoke.py` (`/site-config` -> REQUIRED). Bug fixed inline: `intervention_constraints` `None`->{} field_validator (SQLAlchemy default=dict only fires on flush). Resolver fallback to schema_defaults flagged as D-R2 (must be tightened before any automation consumer). agent-check: 11 PASS / 0 SKIP / 0 FAIL. | `phase-d1-site-config` (pre) + `phase-d1-site-config-routed` (post) |

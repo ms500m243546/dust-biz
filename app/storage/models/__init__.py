@@ -8,7 +8,9 @@ and migrations (migrations land in B.5+).
 from app.storage.models.base import Base
 from app.storage.models.ingest_errors import IngestError
 from app.storage.models.mine import Equipment, HaulRoadSegment, Mine, Sensor, Zone
+from app.storage.models.mine_state import MineStateSnapshot
 from app.storage.models.readings import EquipmentActivity, SensorReading, WeatherReading
+from app.storage.models.site_config import SiteConfiguration
 
 __all__ = [
     "Base",
@@ -17,8 +19,10 @@ __all__ = [
     "HaulRoadSegment",
     "IngestError",
     "Mine",
+    "MineStateSnapshot",
     "Sensor",
     "SensorReading",
+    "SiteConfiguration",
     "WeatherReading",
     "Zone",
 ]

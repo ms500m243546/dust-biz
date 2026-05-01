@@ -11,10 +11,14 @@ from app.api import API_PREFIX, API_VERSION
 from app.api.routes import (
     data_quality,
     equipment_activity,
+    haul_road_segments,
     health,
     meta,
+    mine_state,
     sensor_readings,
+    site_config,
     weather_readings,
+    zones,
 )
 from app.config.settings import get_settings
 from app.storage.database import get_engine
@@ -61,6 +65,10 @@ def create_app() -> FastAPI:
     fastapi_app.include_router(weather_readings.router, prefix=API_PREFIX)
     fastapi_app.include_router(equipment_activity.router, prefix=API_PREFIX)
     fastapi_app.include_router(data_quality.router, prefix=API_PREFIX)
+    fastapi_app.include_router(site_config.router, prefix=API_PREFIX)
+    fastapi_app.include_router(zones.router, prefix=API_PREFIX)
+    fastapi_app.include_router(haul_road_segments.router, prefix=API_PREFIX)
+    fastapi_app.include_router(mine_state.router, prefix=API_PREFIX)
 
     return fastapi_app
 

@@ -32,13 +32,22 @@ const PHASE_C = [
   { entity: 'IngestError',          schemaModule: 'app.schemas.ingest_errors', schemaClass: 'IngestErrorSchema',     model: 'IngestError' },
 ];
 
+const PHASE_D = [
+  { entity: 'SiteConfiguration',    schemaModule: 'app.schemas.site_config',   schemaClass: 'SiteConfigSchema',      model: 'SiteConfiguration' },
+  { entity: 'MineStateSnapshot',    schemaModule: 'app.schemas.mine_state',    schemaClass: 'MineStateZoneSchema',   model: 'MineStateSnapshot' },
+];
+
 const REPOSITORIES = [
   { name: 'SensorReadingRepository',     module: 'app.storage.repositories.sensor_readings' },
   { name: 'WeatherReadingRepository',    module: 'app.storage.repositories.weather_readings' },
   { name: 'EquipmentActivityRepository', module: 'app.storage.repositories.equipment_activity' },
   { name: 'IngestErrorRepository',       module: 'app.storage.repositories.ingest_errors' },
+  { name: 'SiteConfigRepository',        module: 'app.storage.repositories.site_config' },
+  { name: 'ZoneRepository',              module: 'app.storage.repositories.zones' },
+  { name: 'HaulRoadSegmentRepository',   module: 'app.storage.repositories.haul_road_segments' },
+  { name: 'MineStateSnapshotRepository', module: 'app.storage.repositories.mine_state' },
 ];
 
-const ENTITIES = [...PHASE_B4, ...PHASE_C];
+const ENTITIES = [...PHASE_B4, ...PHASE_C, ...PHASE_D];
 
-module.exports = { PHASE_B4, PHASE_C, ENTITIES, REPOSITORIES };
+module.exports = { PHASE_B4, PHASE_C, PHASE_D, ENTITIES, REPOSITORIES };
