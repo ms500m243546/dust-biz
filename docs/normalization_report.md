@@ -9,7 +9,28 @@ phase.
 ## Active phase
 
 **Phase G - Intervention Simulation.**
-Status: pending plan/approval. See `PLAN.md`.
+Status: in progress. G.1 shipped (2026-05-01). G.2-G.4 pending.
+- G.1: Intervention library (S8). `InterventionOptionSchema` per
+  `data-contracts.md` line 167-174 (`risk_class`,
+  `requires_human_approval`, `automation_eligible_levels`,
+  `estimated_time_to_effect_minutes`, `allowed_zone_types`).
+  `InterventionOption` ORM and `InterventionOptionRepository` with
+  upsert + `known_ids`. `app/domain/interventions.py` ships a
+  conservative 7-row default catalog (increase_monitoring,
+  raise_alert, water_road, reduce_speed, reroute_trucks,
+  throttle_crusher, pause_loading) and a `seed_default_interventions`
+  helper that lazy-seeds on first read and never overwrites operator
+  edits. Per Guardrails 13/14, every medium/high-risk default ships
+  with `requires_human_approval=True` and
+  `automation_eligible_levels=[]`; a unit test pins this invariant.
+  `GET /api/v1/interventions`, `GET /.../{id}`, `POST /api/v1/interventions`.
+  `app/api/routes/zones.py` upsert now calls
+  `require_known(...)` against the catalog for both
+  `allowed_interventions` and `requires_approval_for`, surfacing
+  unknown IDs as 400 - this **closes D2-R2**. `PHASE_G` block added
+  to `scripts/lib/contract_index.js` (InterventionOption +
+  InterventionOptionRepository). Smoke promoted to 14 endpoints.
+  240 tests.
 
 **Phase F - Source Attribution.**
 Status: complete (2026-05-01). All four sub-steps shipped.

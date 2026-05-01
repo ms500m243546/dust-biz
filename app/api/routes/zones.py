@@ -4,8 +4,10 @@ GET  /api/v1/zones[?mine_id=]      - list zones (optionally filtered by mine)
 GET  /api/v1/zones/{zone_id}        - single zone or 404
 POST /api/v1/zones                  - upsert a zone
 
-Auth deferred to Phase I (consistent with site-config). Validation of
-intervention-id arrays deferred to Phase G (S8 lands the catalog).
+Auth deferred to Phase I (consistent with site-config). Intervention-id
+arrays on the payload (`allowed_interventions`, `requires_approval_for`)
+are validated against the S8 catalog as of Phase G.1; unknown IDs 400.
+This closes D2-R2.
 """
 
 from __future__ import annotations
@@ -17,6 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_session
+from app.domain.interventions import UnknownInterventionError, require_known
 from app.schemas.mine import ZoneSchema
 from app.storage.models import Mine, Zone
 from app.storage.repositories.zones import ZoneRepository
@@ -53,6 +56,13 @@ def upsert_zone(payload: ZoneSchema, session: SessionDep) -> ZoneSchema:
             status_code=400,
             detail=f"unknown mine_id: {payload.mine_id} (create the Mine row first)",
         )
+    try:
+        require_known(
+            session,
+            list(payload.allowed_interventions) + list(payload.requires_approval_for),
+        )
+    except UnknownInterventionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     zone = ZoneRepository(session).upsert(
         zone_id=payload.zone_id,
         mine_id=payload.mine_id,

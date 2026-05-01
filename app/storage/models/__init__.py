@@ -11,6 +11,7 @@ from app.storage.models.dust_events import DustEvent
 from app.storage.models.features import FeatureRecord
 from app.storage.models.forecasts import DustPrediction
 from app.storage.models.ingest_errors import IngestError
+from app.storage.models.interventions import InterventionOption
 from app.storage.models.mine import Equipment, HaulRoadSegment, Mine, Sensor, Zone
 from app.storage.models.mine_state import MineStateSnapshot
 from app.storage.models.readings import EquipmentActivity, SensorReading, WeatherReading
@@ -25,6 +26,7 @@ __all__ = [
     "FeatureRecord",
     "HaulRoadSegment",
     "IngestError",
+    "InterventionOption",
     "Mine",
     "MineStateSnapshot",
     "Sensor",

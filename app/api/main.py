@@ -16,6 +16,7 @@ from app.api.routes import (
     forecasts,
     haul_road_segments,
     health,
+    interventions,
     meta,
     mine_state,
     sensor_readings,
@@ -75,6 +76,7 @@ def create_app() -> FastAPI:
     fastapi_app.include_router(forecasts.router, prefix=API_PREFIX)
     fastapi_app.include_router(dust_events.router, prefix=API_PREFIX)
     fastapi_app.include_router(attributions.router, prefix=API_PREFIX)
+    fastapi_app.include_router(interventions.router, prefix=API_PREFIX)
 
     return fastapi_app
 

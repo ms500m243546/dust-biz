@@ -48,6 +48,10 @@ const PHASE_F = [
   { entity: 'SourceAttribution',    schemaModule: 'app.schemas.attributions',  schemaClass: 'SourceAttributionSchema',   model: 'SourceAttribution' },
 ];
 
+const PHASE_G = [
+  { entity: 'InterventionOption',   schemaModule: 'app.schemas.interventions', schemaClass: 'InterventionOptionSchema',  model: 'InterventionOption' },
+];
+
 const REPOSITORIES = [
   { name: 'SensorReadingRepository',         module: 'app.storage.repositories.sensor_readings' },
   { name: 'WeatherReadingRepository',        module: 'app.storage.repositories.weather_readings' },
@@ -61,8 +65,9 @@ const REPOSITORIES = [
   { name: 'DustPredictionRepository',        module: 'app.storage.repositories.forecasts' },
   { name: 'DustEventRepository',             module: 'app.storage.repositories.dust_events' },
   { name: 'SourceAttributionRepository',     module: 'app.storage.repositories.attributions' },
+  { name: 'InterventionOptionRepository',    module: 'app.storage.repositories.interventions' },
 ];
 
-const ENTITIES = [...PHASE_B4, ...PHASE_C, ...PHASE_D, ...PHASE_E, ...PHASE_F];
+const ENTITIES = [...PHASE_B4, ...PHASE_C, ...PHASE_D, ...PHASE_E, ...PHASE_F, ...PHASE_G];
 
-module.exports = { PHASE_B4, PHASE_C, PHASE_D, PHASE_E, PHASE_F, ENTITIES, REPOSITORIES };
+module.exports = { PHASE_B4, PHASE_C, PHASE_D, PHASE_E, PHASE_F, PHASE_G, ENTITIES, REPOSITORIES };
