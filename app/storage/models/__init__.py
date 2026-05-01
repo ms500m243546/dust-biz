@@ -5,6 +5,7 @@ are imported here so `Base.metadata.create_all` sees them in tests
 and migrations (migrations land in B.5+).
 """
 
+from app.storage.models.attributions import SourceAttribution
 from app.storage.models.base import Base
 from app.storage.models.dust_events import DustEvent
 from app.storage.models.features import FeatureRecord
@@ -29,6 +30,7 @@ __all__ = [
     "Sensor",
     "SensorReading",
     "SiteConfiguration",
+    "SourceAttribution",
     "WeatherReading",
     "Zone",
 ]
