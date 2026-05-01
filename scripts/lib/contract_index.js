@@ -3,14 +3,14 @@
 /**
  * Phase-aware contract expectations.
  *
- * Each entry says: at this phase, this entity should have a Pydantic
- * schema (in app.schemas.<module>) and/or a SQLAlchemy model (in
- * app.storage.models). Adding entries here is the way to enforce a
- * new contract.
+ * Each entity entry says: at this phase, this entity should have a
+ * Pydantic schema (in app.schemas.<module>) and/or a SQLAlchemy model
+ * (in app.storage.models). Each repository entry says: this repository
+ * class should be importable.
  *
- * The validate-contracts check uses this to confirm the implementation
- * matches the documented contracts in docs/data-contracts.md without
- * hand-curated mass parsing.
+ * Adding entries here is the way to enforce a new contract. The
+ * validate-contracts check uses this to confirm implementation
+ * matches the documented contracts in docs/data-contracts.md.
  */
 
 const PHASE_B4 = [
@@ -28,4 +28,17 @@ const PHASE_B4 = [
   { entity: 'SensorHealthStatus',   schemaModule: 'app.schemas.sensor',    schemaClass: 'SensorHealthStatusSchema',  model: null },
 ];
 
-module.exports = { PHASE_B4 };
+const PHASE_C = [
+  { entity: 'IngestError',          schemaModule: 'app.schemas.ingest_errors', schemaClass: 'IngestErrorSchema',     model: 'IngestError' },
+];
+
+const REPOSITORIES = [
+  { name: 'SensorReadingRepository',     module: 'app.storage.repositories.sensor_readings' },
+  { name: 'WeatherReadingRepository',    module: 'app.storage.repositories.weather_readings' },
+  { name: 'EquipmentActivityRepository', module: 'app.storage.repositories.equipment_activity' },
+  { name: 'IngestErrorRepository',       module: 'app.storage.repositories.ingest_errors' },
+];
+
+const ENTITIES = [...PHASE_B4, ...PHASE_C];
+
+module.exports = { PHASE_B4, PHASE_C, ENTITIES, REPOSITORIES };

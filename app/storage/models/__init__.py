@@ -6,6 +6,7 @@ and migrations (migrations land in B.5+).
 """
 
 from app.storage.models.base import Base
+from app.storage.models.ingest_errors import IngestError
 from app.storage.models.mine import Equipment, HaulRoadSegment, Mine, Sensor, Zone
 from app.storage.models.readings import EquipmentActivity, SensorReading, WeatherReading
 
@@ -14,6 +15,7 @@ __all__ = [
     "Equipment",
     "EquipmentActivity",
     "HaulRoadSegment",
+    "IngestError",
     "Mine",
     "Sensor",
     "SensorReading",

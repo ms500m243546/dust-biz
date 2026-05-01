@@ -3,24 +3,26 @@
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { resolvePython, pythonSourceLabel } = require('../lib/python');
-const { PHASE_B4 } = require('../lib/contract_index');
+const { ENTITIES, REPOSITORIES } = require('../lib/contract_index');
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const python = resolvePython(ROOT);
-
-const expectations = PHASE_B4;
 
 // Pass expectations via stdin as JSON to avoid Python/JSON keyword
 // mismatches (null vs None, true vs True).
 const importProgram = `
 import importlib, json, sys
 
-expectations = json.loads(sys.stdin.read())
+payload = json.loads(sys.stdin.read())
+entities = payload["entities"]
+repositories = payload["repositories"]
+
 errors = []
 checked_schemas = 0
 checked_models = 0
+checked_repos = 0
 
-for spec in expectations:
+for spec in entities:
     try:
         mod = importlib.import_module(spec["schemaModule"])
         cls = getattr(mod, spec["schemaClass"], None)
@@ -42,14 +44,30 @@ for spec in expectations:
         except Exception as e:
             errors.append(f"ORM model import failed: {spec['model']} ({e})")
 
-print(json.dumps({"errors": errors, "schemas": checked_schemas, "models": checked_models}))
+for repo in repositories:
+    try:
+        mod = importlib.import_module(repo["module"])
+        cls = getattr(mod, repo["name"], None)
+        if cls is None:
+            errors.append(f"repository missing: {repo['module']}.{repo['name']}")
+        else:
+            checked_repos += 1
+    except Exception as e:
+        errors.append(f"repository import failed: {repo['module']} ({e})")
+
+print(json.dumps({
+    "errors": errors,
+    "schemas": checked_schemas,
+    "models": checked_models,
+    "repos": checked_repos,
+}))
 sys.exit(1 if errors else 0)
 `;
 
 const result = spawnSync(python, ['-c', importProgram], {
   cwd: ROOT,
   encoding: 'utf8',
-  input: JSON.stringify(expectations),
+  input: JSON.stringify({ entities: ENTITIES, repositories: REPOSITORIES }),
 });
 
 if (result.error) {
@@ -73,6 +91,6 @@ if (result.status !== 0) {
   process.exit(result.status || 1);
 }
 
-console.log(`${payload.schemas} Pydantic schemas + ${payload.models} ORM models present`);
-console.log(`${expectations.length} contract entities checked against scripts/lib/contract_index.js`);
+console.log(`${payload.schemas} Pydantic schemas + ${payload.models} ORM models + ${payload.repos} repositories present`);
+console.log(`${ENTITIES.length} contract entities + ${REPOSITORIES.length} repositories checked against scripts/lib/contract_index.js`);
 process.exit(0);

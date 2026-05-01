@@ -1,14 +1,37 @@
 """API entry point - FastAPI app factory and router wiring."""
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 import app as app_pkg
 from app.api import API_PREFIX, API_VERSION
-from app.api.routes import health, meta
+from app.api.routes import (
+    data_quality,
+    equipment_activity,
+    health,
+    meta,
+    sensor_readings,
+    weather_readings,
+)
 from app.config.settings import get_settings
+from app.storage.database import get_engine
+from app.storage.models import Base
 
 __all__ = ["API_PREFIX", "API_VERSION", "app", "create_app"]
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    """Startup/shutdown hooks.
+
+    Phase C dev convenience: ensure tables exist on startup. Phase E
+    replaces this with Alembic migrations alongside the Postgres swap.
+    """
+    Base.metadata.create_all(get_engine())
+    yield
 
 
 def create_app() -> FastAPI:
@@ -20,6 +43,7 @@ def create_app() -> FastAPI:
             "Production-preserving dust-risk optimization platform for mines. "
             "See docs/system-map.md for subsystem boundaries."
         ),
+        lifespan=lifespan,
     )
 
     if settings.cors_allow_origins:
@@ -33,6 +57,10 @@ def create_app() -> FastAPI:
 
     fastapi_app.include_router(health.router, prefix=API_PREFIX, tags=["meta"])
     fastapi_app.include_router(meta.router, prefix=API_PREFIX, tags=["meta"])
+    fastapi_app.include_router(sensor_readings.router, prefix=API_PREFIX)
+    fastapi_app.include_router(weather_readings.router, prefix=API_PREFIX)
+    fastapi_app.include_router(equipment_activity.router, prefix=API_PREFIX)
+    fastapi_app.include_router(data_quality.router, prefix=API_PREFIX)
 
     return fastapi_app
 

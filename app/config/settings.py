@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     log_level: LogLevel = "INFO"
     cors_allow_origins: tuple[str, ...] = ()
     database_url: str = "sqlite:///./dustops.db"
+    # R9 mitigation: when running on synthetic data, set DUSTOPS_MOCK_MODE=true
+    # so /api/v1/meta reports it and the dashboard (Phase J) can show
+    # a "DEMO DATA" badge.
+    mock_mode: bool = False
 
     model_config = SettingsConfigDict(
         env_prefix="DUSTOPS_",

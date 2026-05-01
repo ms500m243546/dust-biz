@@ -21,6 +21,10 @@ from app.api.main import app
 REQUIRED_ENDPOINTS = [
     ("/api/v1/health", 200),
     ("/api/v1/meta", 200),
+    ("/api/v1/sensor-readings", 200),
+    ("/api/v1/weather-readings", 200),
+    ("/api/v1/equipment-activity", 200),
+    ("/api/v1/data-quality", 200),
 ]
 
 PENDING_ENDPOINTS = [

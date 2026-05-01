@@ -41,6 +41,12 @@ desktop.ini
 web/dist/
 web/build/
 
+# Local databases (dev)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
 # Secrets
 .env
 .env.*

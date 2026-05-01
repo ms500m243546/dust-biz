@@ -41,7 +41,9 @@ class RawSensorReadingSchema(BaseModel):
     sensor_id: str
     timestamp: datetime
     raw_value: dict[str, Any]
-    received_at: datetime
+    # received_at is server-set on insert (DB default `now()`); clients
+    # never provide it. Reads from the ORM populate it from storage.
+    received_at: datetime | None = None
     source_quality_hint: float | None = Field(default=None, ge=0.0, le=1.0)
 
 

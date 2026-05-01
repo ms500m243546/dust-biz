@@ -247,6 +247,20 @@ architect protocol.
   positive rate, false negative rate, calibration error, avoided
   shutdowns estimate)
 
+### `ingest_errors` (Phase C)
+Append-only record of payloads that failed schema validation at any
+ingestion endpoint. Honors safety guardrail G10 in
+`safety-guardrails.md`: bad data must not silently poison the model.
+Anything rejected lands here for later inspection rather than being
+dropped.
+
+- `error_id` (PK; autoincrement)
+- `received_at` (UTC; server default `now()`)
+- `source_endpoint` (string; e.g. `"POST /api/v1/sensor-readings"`)
+- `raw_payload` (JSON; the original body, untouched)
+- `validation_errors` (JSON; array of `{field, message}`)
+- `client_request_id` (string, optional; for idempotency follow-up)
+
 ### `audit_logs`
 - `audit_id` (PK)
 - `occurred_at` (UTC)

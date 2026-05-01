@@ -8,8 +8,20 @@ phase.
 
 ## Active phase
 
-**Phase C - Data Harness.**
+**Phase D - Mine State Engine.**
 Status: pending plan/approval. See `PLAN.md`.
+
+**Phase C - Data Harness.**
+Status: complete (2026-05-01). All four sub-steps shipped.
+- C.1: repository layer + `ingest_errors` table (G10).
+- C.2: ingestion endpoints (single + batch + GET) for sensor /
+  weather / equipment, with validation failures persisted to
+  `ingest_errors` before the 422 response.
+- C.3: reproducible mock stream generators + real `seed_mock_data.py`
+  CLI; `mock_mode` flag exposed on `/api/v1/meta`.
+- C.4: S2 data-quality scoring (`SensorHealthScorer` heuristics) +
+  `GET /api/v1/data-quality[/{sensor_id}]`. Smoke now asserts the
+  data-quality endpoint as required.
 
 **Phase B - Repo Scaffold.**
 Status: complete (2026-05-01). All five sub-steps shipped; 11 of 11
@@ -35,8 +47,8 @@ Status: complete (approved 2026-04-30; auto-validated continuously).
 |-------|--------------------------------|-------------|
 | A     | Architecture Constitution      | complete    |
 | B     | Repo Scaffold                  | complete    |
-| C     | Data Harness                   | pending (next) |
-| D     | Mine State Engine              | pending     |
+| C     | Data Harness                   | complete    |
+| D     | Mine State Engine              | pending (next) |
 | E     | Forecasting MVP                | pending     |
 | F     | Source Attribution             | pending     |
 | G     | Intervention Simulation        | pending     |
@@ -102,6 +114,37 @@ exist yet.
 ---
 
 ## Risks (open)
+
+### R8 - SQLite write-lock under concurrent ingestion
+Severity: low (Phase C, single process).
+SQLite serializes writes; concurrent POSTs to ingestion endpoints
+will queue. Acceptable for Phase C dev/demo. Mitigation: keep
+single-writer semantics; the Postgres swap is a Phase E candidate per
+`docs/architecture.md` swap criteria (TimescaleDB-style retention is
+the trigger).
+
+### R9 - Mock data realism
+Severity: medium (latent until Phase E).
+Synthetic streams that are too clean cause forecasting models to
+overfit synthetic patterns. Mitigation in C.3: parameterized noise +
+spike profiles; expose a `mock_data_source` flag in `/api/v1/meta` so
+the dashboard (Phase J) can show a "DEMO DATA" badge.
+
+### R10 - Idempotency / duplicate POSTs
+Severity: medium.
+Upstream retries would duplicate readings if not deduplicated.
+Mitigation in C.2: optional `client_request_id` on POST; if present,
+prior insert with same `(sensor_id, timestamp, client_request_id)`
+short-circuits silently. No DB-level unique constraint yet (would
+block legitimate same-timestamp distinct readings); revisit in
+Phase E.
+
+### R11 - Validation strictness vs dirty real-world data
+Severity: medium.
+Strict Pydantic validation will reject malformed payloads from real
+sensors/dispatch systems; lenient validation poisons the model.
+Mitigation: validate strictly + persist rejections to `ingest_errors`
+(G10). Reviewable, retryable, never silently lost.
 
 ### R1 - No git yet
 Severity: low.
@@ -207,3 +250,7 @@ turning the gate red.
 | 2026-05-01 | B.3          | FastAPI app + `/api/v1/health` + `/api/v1/meta`; constants moved to `app/api/__init__.py` to avoid main<->routes circular import; `scripts/_smoke.py` + `scripts/checks/smoke.js` (TestClient in-process). agent-check: 7 PASS / 4 SKIP / 0 FAIL. | `phase-b3-health` |
 | 2026-05-01 | B.4          | Pydantic schemas (mine/sensor/weather/equipment) + SQLAlchemy models (Mine, Zone, HaulRoadSegment, Sensor, Equipment, SensorReading, WeatherReading, EquipmentActivity) + `app/storage/database.py` session factory; `scripts/lib/contract_index.js` declares B.4 expectations; `validate-contracts.js` enforces them. SQLAlchemy added to deps; `database_url` setting added (default `sqlite:///./dustops.db`). 34 tests pass under strict mypy. agent-check: 8 PASS / 3 SKIP / 0 FAIL. | `phase-b4-storage` |
 | 2026-05-01 | B.5          | Boundary scanner (`validate-boundaries.js`: scans 14 .py files across `app/storage,domain,schemas,audit` for forbidden upward imports), safety scanner (`validate-safety.js`: forbidden-token scan + structural field check that activates as Forecast/Recommendation/Attribution/Simulation schemas land in E/F/G/H), `review-diff.js` (git working-tree health + soft normalization-report nudge), `Dockerfile` (Python 3.11-slim + uvicorn entrypoint), `docker-compose.yml` (api service), `.dockerignore`, `scripts/seed_mock_data.py` (Phase C placeholder). Phase B complete: agent-check 11 PASS / 0 SKIP / 0 FAIL. | `phase-b5-validators` |
+| 2026-05-01 | C.1          | Repository layer: `BaseRepository` + `SensorReadingRepository`, `WeatherReadingRepository`, `EquipmentActivityRepository`, `IngestErrorRepository`. New `ingest_errors` table + `IngestError` ORM model + `IngestErrorSchema` (G10). `contract_index.js` extended with `PHASE_C` + `REPOSITORIES`; `validate-contracts.js` now verifies repositories. R8-R11 risks recorded. | `phase-c1-repos` |
+| 2026-05-01 | C.2          | Ingestion endpoints: POST/POST-batch/GET for `/api/v1/sensor-readings`, `/weather-readings`, `/equipment-activity`. Validation failures persist to `ingest_errors` then 422. Added `app/api/deps.py` (session injection) + `tests/api/conftest.py` (TestClient with dependency override) - both infrastructure additions on top of the approved file list. `received_at` in `RawSensorReadingSchema` made optional (server-set). Smoke now asserts the three new GET endpoints. R10 (idempotency) deferred to Phase E pending `client_request_id` contract change. Bugs caught and fixed mid-run: (a) ruff B008 on `Depends(...)` defaults -> Annotated[]; (b) SQLite `:memory:` per-connection isolation broke TestClient -> StaticPool; (c) FastAPI prod DB had no tables -> lifespan `Base.metadata.create_all`; (d) HTTPException rolled back IngestError row -> commit before raise. Plus added `*.db` to `.gitignore`. | `phase-c2-ingestion` |
+| 2026-05-01 | C.3          | Mock stream generators (`app/ingestion/mock_streams.py`): reproducible sensor/weather/equipment streams with diurnal curves + parameterized noise + spikes. `scripts/seed_mock_data.py` rewritten as a real CLI on top of those generators. R9 mitigation: new `mock_mode` setting; `/api/v1/meta` now reports it. | `phase-c3-mockgen` |
+| 2026-05-01 | C.4          | S2 data-quality scoring: `app/domain/data_quality.py:SensorHealthScorer` heuristics (offline / stale / few-readings / high-variance / source-quality-hint propagation). `GET /api/v1/data-quality` returns scores for all sensors, `GET /api/v1/data-quality/{sensor_id}` returns one. Smoke promotes the endpoint from PENDING to REQUIRED. Phase C complete; phase advanced to D. | `phase-c4-quality` |

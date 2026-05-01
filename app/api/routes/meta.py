@@ -19,6 +19,7 @@ from pydantic import BaseModel
 
 import app
 from app.api import API_VERSION
+from app.config.settings import get_settings
 
 router = APIRouter()
 
@@ -32,6 +33,7 @@ class MetaResponse(BaseModel):
     api_version: str
     current_phase: str
     completed_phases: list[str]
+    mock_mode: bool
 
 
 def _load_phase_state() -> tuple[str, list[str]]:
@@ -50,10 +52,12 @@ def _load_phase_state() -> tuple[str, list[str]]:
 @router.get("/meta", response_model=MetaResponse)
 def meta() -> MetaResponse:
     current, completed = _load_phase_state()
+    settings = get_settings()
     return MetaResponse(
         name="DustOps AI",
         version=app.__version__,
         api_version=API_VERSION,
         current_phase=current,
         completed_phases=completed,
+        mock_mode=settings.mock_mode,
     )
