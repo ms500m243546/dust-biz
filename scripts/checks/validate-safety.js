@@ -12,6 +12,12 @@
  *  G15 every Recommendation- and DustForecast-named schema declares
  *      a `model_version` field.
  *
+ * Schema-shape checks are scoped to `app/schemas/` - the only place
+ * Pydantic data contracts live (per docs/architecture.md and the
+ * layer rule). Repositories, exceptions, and model-implementation
+ * classes whose names happen to contain "Forecast" / "Prediction"
+ * are not data contracts and are not the target of this check.
+ *
  * Forbidden-pattern scan (across all .py in app/):
  *  - "skip_approval", "bypass_approval", "auto_execute_without_approval"
  *  - "TODO: confidence", "TODO: reason"
@@ -27,6 +33,7 @@ const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const APP_DIR = path.join(ROOT, 'app');
+const SCHEMA_DIR = path.join(APP_DIR, 'schemas');
 
 const SAFETY_RELEVANT_PATTERNS = [
   { kind: 'Forecast',       require: ['confidence', 'model_version'] },
@@ -74,6 +81,12 @@ for (const file of pyFiles) {
       errors.push(`${rel} contains forbidden token "${sub}" (safety-guardrails.md)`);
     }
   }
+}
+
+const schemaFiles = listPyFiles(SCHEMA_DIR);
+for (const file of schemaFiles) {
+  const content = fs.readFileSync(file, 'utf8');
+  const rel = path.relative(ROOT, file).replace(/\\/g, '/');
 
   for (const pattern of SAFETY_RELEVANT_PATTERNS) {
     // Match class names that contain the kind, e.g. "RecommendationSchema",

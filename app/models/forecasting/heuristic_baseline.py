@@ -19,7 +19,6 @@ model returns a low-confidence forecast flagged
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from typing import Literal
 
 from app.schemas.features import FeatureRecordSchema
 from app.schemas.forecasts import (
@@ -46,9 +45,16 @@ _PM10_BREACH = 150.0
 
 
 class HeuristicBaselineForecaster:
-    """First implementation of `DustForecastModel`."""
+    """First implementation of `DustForecastModel`.
 
-    model_kind: Literal["dust_forecast"] = "dust_forecast"
+    `model_kind` is typed `str` (not `Literal["dust_forecast"]`) for
+    Protocol-compatibility with the registry's structural type;
+    docs/model-contracts.md declares the Literal at the Protocol
+    level, while implementations narrow at runtime via the assigned
+    string value.
+    """
+
+    model_kind: str = "dust_forecast"
 
     def __init__(self, model_version: str = HEURISTIC_VERSION) -> None:
         self.model_version = model_version
