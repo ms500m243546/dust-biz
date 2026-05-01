@@ -10,6 +10,7 @@ import app as app_pkg
 from app.api import API_PREFIX, API_VERSION
 from app.api.routes import (
     data_quality,
+    dust_events,
     equipment_activity,
     forecasts,
     haul_road_segments,
@@ -71,6 +72,7 @@ def create_app() -> FastAPI:
     fastapi_app.include_router(haul_road_segments.router, prefix=API_PREFIX)
     fastapi_app.include_router(mine_state.router, prefix=API_PREFIX)
     fastapi_app.include_router(forecasts.router, prefix=API_PREFIX)
+    fastapi_app.include_router(dust_events.router, prefix=API_PREFIX)
 
     return fastapi_app
 
