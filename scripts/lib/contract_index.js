@@ -49,7 +49,8 @@ const PHASE_F = [
 ];
 
 const PHASE_G = [
-  { entity: 'InterventionOption',   schemaModule: 'app.schemas.interventions', schemaClass: 'InterventionOptionSchema',  model: 'InterventionOption' },
+  { entity: 'InterventionOption',     schemaModule: 'app.schemas.interventions', schemaClass: 'InterventionOptionSchema',     model: 'InterventionOption' },
+  { entity: 'InterventionSimulation', schemaModule: 'app.schemas.simulations',   schemaClass: 'InterventionSimulationSchema', model: 'InterventionSimulation' },
 ];
 
 const REPOSITORIES = [
@@ -66,6 +67,7 @@ const REPOSITORIES = [
   { name: 'DustEventRepository',             module: 'app.storage.repositories.dust_events' },
   { name: 'SourceAttributionRepository',     module: 'app.storage.repositories.attributions' },
   { name: 'InterventionOptionRepository',    module: 'app.storage.repositories.interventions' },
+  { name: 'InterventionSimulationRepository', module: 'app.storage.repositories.simulations' },
 ];
 
 const ENTITIES = [...PHASE_B4, ...PHASE_C, ...PHASE_D, ...PHASE_E, ...PHASE_F, ...PHASE_G];

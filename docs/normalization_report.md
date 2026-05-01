@@ -8,8 +8,11 @@ phase.
 
 ## Active phase
 
+**Phase H - Recommendation Engine.**
+Status: pending plan/approval. See `PLAN.md`.
+
 **Phase G - Intervention Simulation.**
-Status: in progress. G.1 shipped (2026-05-01). G.2-G.4 pending.
+Status: complete (2026-05-01). All four sub-steps shipped.
 - G.1: Intervention library (S8). `InterventionOptionSchema` per
   `data-contracts.md` line 167-174 (`risk_class`,
   `requires_human_approval`, `automation_eligible_levels`,
@@ -31,6 +34,64 @@ Status: in progress. G.1 shipped (2026-05-01). G.2-G.4 pending.
   to `scripts/lib/contract_index.js` (InterventionOption +
   InterventionOptionRepository). Smoke promoted to 14 endpoints.
   240 tests.
+- G.2: `InterventionImpactModel` heuristic (S9). Schemas in
+  `app/schemas/simulations.py` (`InterventionImpactSchema`,
+  `ProductionCostEstimateSchema`, `InterventionSimulationSchema`);
+  the Simulation-named class brings `validate-safety` to 4 tracked
+  schemas (was 3). `app/models/intervention/heuristic_baseline.py`
+  ships `intervention_impact_heuristic_v0.1.0` with per-intervention
+  reduction fractions (water 35%, reduce_speed 20%, reroute 50%,
+  throttle 40%, pause_loading 60%), risk-class confidence penalty,
+  PM2.5 proportional reduction at 0.85 ratio, and a do-nothing
+  branch. Pure function per universal model rule 5. 253 tests.
+- G.3: `ProductionCostModel` heuristic (S10).
+  `app/models/cost/heuristic_baseline.py` ships
+  `production_cost_heuristic_v0.1.0`. Tonnes delayed =
+  `production_rate_tph * effective_duration_hr * loss_fraction`;
+  effective duration defaults to 2x time-to-effect (capped 60min)
+  but a caller-supplied `duration_minutes` overrides. Unknown
+  production rate degrades confidence rather than fabricating
+  tonnes. 260 tests.
+- G.4: Orchestrator + ORM + API + persistence + phase advance.
+  `app/storage/models/simulations.py` and matching repository
+  (`SIM-YYYYMMDD-NNNN` IDs resetting per UTC day, append-only).
+  `app/domain/simulation.py:simulate_intervention` resolves the
+  intervention from the catalog, finds the latest forecast for the
+  zone (zone-targeted first, sensor-targeted fallback for sensors
+  in that zone), reads `production_rate_tph` from the latest
+  MineState snapshot, calls both heuristic models, joins (joined
+  confidence = min of impact/cost confidences), persists.
+  `simulate_do_nothing` is the counterfactual baseline using the
+  reserved `_do_nothing_` intervention shape. Lazy-registers both
+  models on first call (same pattern as forecasting / attribution).
+  `POST /api/v1/simulations/intervention`,
+  `POST /api/v1/simulations/do-nothing`,
+  `GET /api/v1/simulations` (smoke happy path).
+  Smoke promoted to 15 endpoints. PHASE_G index extended with
+  `InterventionSimulation` + repo. `.progress_state.json` advanced
+  to `current_phase=H`. 278 tests.
+
+Open risks introduced in Phase G:
+- G2-R1 (medium-latent): intervention impact reduction fractions
+  are uncalibrated; revisit with D3-R1 / E2-R1 / F3-R2 in Phase K.
+- G3-R1 (low): cost coefficients uncalibrated and financial
+  conversion deferred until `site_config.cost_curves` lands.
+- G3-R2 (low): default effective duration = 2x time-to-effect
+  is a rule of thumb; a real intervention plan will pass an
+  explicit duration.
+- G4-R1 (low): simulation endpoints unauthenticated; same posture
+  as forecast / attribution endpoints, deferred to Phase I.
+- G4-R2 (low): zone-target forecast lookup is a most-recent
+  scan; a forecast aged out beyond 60min will still be used.
+  Tighten when the dashboard surfaces forecast staleness in J.
+
+Closed during Phase G:
+- D2-R2 (zone `allowed_interventions` / `requires_approval_for`
+  IDs) - validated against the catalog at zone upsert.
+- D-R3 partial: `intervention_constraints` shape itself remains
+  free-JSON, but the IDs that key it are now validated whenever
+  the recommendation engine looks them up via `require_known`.
+  Full schema enforcement deferred to H/J when the consumers land.
 
 **Phase F - Source Attribution.**
 Status: complete (2026-05-01). All four sub-steps shipped.

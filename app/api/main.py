@@ -20,6 +20,7 @@ from app.api.routes import (
     meta,
     mine_state,
     sensor_readings,
+    simulations,
     site_config,
     weather_readings,
     zones,
@@ -77,6 +78,7 @@ def create_app() -> FastAPI:
     fastapi_app.include_router(dust_events.router, prefix=API_PREFIX)
     fastapi_app.include_router(attributions.router, prefix=API_PREFIX)
     fastapi_app.include_router(interventions.router, prefix=API_PREFIX)
+    fastapi_app.include_router(simulations.router, prefix=API_PREFIX)
 
     return fastapi_app
 
