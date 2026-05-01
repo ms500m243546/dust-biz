@@ -37,6 +37,12 @@ const PHASE_D = [
   { entity: 'MineStateSnapshot',    schemaModule: 'app.schemas.mine_state',    schemaClass: 'MineStateZoneSchema',   model: 'MineStateSnapshot' },
 ];
 
+const PHASE_E = [
+  { entity: 'FeatureRecord',        schemaModule: 'app.schemas.features',      schemaClass: 'FeatureRecordSchema',   model: 'FeatureRecord' },
+  { entity: 'DustForecast',         schemaModule: 'app.schemas.forecasts',     schemaClass: 'DustForecastSchema',    model: null },
+  { entity: 'DustPrediction',       schemaModule: 'app.schemas.forecasts',     schemaClass: 'DustForecastSchema',    model: 'DustPrediction' },
+];
+
 const REPOSITORIES = [
   { name: 'SensorReadingRepository',     module: 'app.storage.repositories.sensor_readings' },
   { name: 'WeatherReadingRepository',    module: 'app.storage.repositories.weather_readings' },
@@ -46,8 +52,10 @@ const REPOSITORIES = [
   { name: 'ZoneRepository',              module: 'app.storage.repositories.zones' },
   { name: 'HaulRoadSegmentRepository',   module: 'app.storage.repositories.haul_road_segments' },
   { name: 'MineStateSnapshotRepository', module: 'app.storage.repositories.mine_state' },
+  { name: 'FeatureRepository',           module: 'app.storage.repositories.features' },
+  { name: 'DustPredictionRepository',    module: 'app.storage.repositories.forecasts' },
 ];
 
-const ENTITIES = [...PHASE_B4, ...PHASE_C, ...PHASE_D];
+const ENTITIES = [...PHASE_B4, ...PHASE_C, ...PHASE_D, ...PHASE_E];
 
-module.exports = { PHASE_B4, PHASE_C, PHASE_D, ENTITIES, REPOSITORIES };
+module.exports = { PHASE_B4, PHASE_C, PHASE_D, PHASE_E, ENTITIES, REPOSITORIES };

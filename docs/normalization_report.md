@@ -8,8 +8,84 @@ phase.
 
 ## Active phase
 
-**Phase E - Forecasting MVP.**
+**Phase F - Source Attribution.**
 Status: pending plan/approval. See `PLAN.md`.
+
+**Phase E - Forecasting MVP.**
+Status: complete (2026-05-01). All four sub-steps shipped.
+- E.1: S5 feature pipeline. `FeatureRecordSchema`, `FeatureRecord`
+  ORM, `FeatureRepository`, `app/domain/features.py:build_feature_record`
+  emitting under `feature_pipeline_v0.1.0`. Payload namespaces:
+  `pm.*`, `wind.*`, `activity.*`, `state.*`, `meta.*`. Builder
+  enforces leakage guard (readings strictly older than `as_of`) and
+  propagates upstream staleness into `missing_inputs` without
+  fabricating values (G5). 130 tests.
+- E.2: Model registry + heuristic forecast baseline.
+  `app/models/` namespace introduced as a Domain peer (must not
+  import `app.api.*` or `app.storage.*`; rule added to
+  `validate-boundaries.js`). `app/models/registry.py` with
+  register / set_current / get_current / list_versions /
+  reset (test isolation). `dust_forecast_heuristic_v0.1.0`
+  (PM trend projection x dryness/wind dust factor x smooth breach
+  ramp; raw confidence scaled by `input_data_quality_score` per G4;
+  fallback path on missing PM features per G11 with
+  `source = "heuristic_fallback"`). `DustForecastSchema` lands in
+  `app/schemas/forecasts.py` carrying every guardrail-mandated
+  field (G2/G5/G11/G15). 149 tests; `validate-safety` activates
+  (no longer vacuously green).
+- E.3: Persistence + orchestration. `DustPrediction` ORM matching
+  `data-contracts.md` line 131-148, `DustPredictionRepository`
+  (latest_for_target / get_recent / next_prediction_id with
+  `PRED-YYYYMMDD-NNNN` format resetting per UTC day),
+  `app/domain/forecasting.py:issue_forecast` composing the full
+  pipeline (S4 -> S2 quality multiplier -> S5 -> registry -> S6 ->
+  audit write). Sensor-target resolution falls through to the
+  sensor's zone for feature build while keeping the forecast
+  keyed on the sensor identity. Tightened
+  `scripts/checks/validate-safety.js` to its documented Pydantic
+  schema scope (`app/schemas/`); had been over-matching repo and
+  exception classes whose names contained Forecast/Prediction. 159
+  tests.
+- E.4: API + smoke + contract index. `GET /api/v1/forecasts/current`
+  (compute-on-read with persist; defaults to single-zone happy
+  path; returns null on empty DB so smoke can pass before data
+  loads) and `GET /api/v1/forecasts/history`. Promoted
+  `forecasts/current` to REQUIRED in smoke. `PHASE_E` block added
+  to `scripts/lib/contract_index.js` (FeatureRecord, DustForecast,
+  DustPrediction + FeatureRepository, DustPredictionRepository).
+  Phase advanced to F. 167 tests.
+
+Within-phase note: per the approved plan, E.2 was scoped to
+"registry + heuristic" and E.3 to "DustForecastSchema + ORM/repo +
+orchestrator", but the heuristic's return type is the schema, so
+the schema landed at E.2 (its natural pair) and E.3 carried only
+ORM/repo/orchestrator. No new requirements introduced.
+
+Closed during Phase E:
+- (no Phase D risk fully closed; D3-R1 still open until calibration
+  data lands in K)
+
+Open risks introduced in Phase E:
+- E1-R1 (low): leakage guard at builder is single-point; trust
+  remains on caller-supplied `as_of`. Resolution: Phase K offline
+  evaluation harness will sweep historical data and assert on it.
+- E2-R1 (medium-latent): heuristic forecast uncalibrated. Tracked
+  alongside D3-R1; resolution stays Phase K.
+- E2-R2 (low): registry is process-global. Test isolation handled
+  via `reset()`; production path bootstraps once at startup. Re-
+  visit only if multi-tenant deployment surfaces.
+- E3-R1 (low): `DustPrediction.input_data_quality_score` rounded
+  to 3 decimals on persist; fine for audit, may need raw on
+  Phase K reanalysis.
+- E4-R1 (low): forecast endpoint compute-on-read can be expensive
+  with many zones. Caching deferred to Phase J performance pass.
+- E4-R2 (low): forecast endpoints unauthenticated. Same posture as
+  D2-R1; deferred to Phase I.
+
+`validate-safety` activated: 2 schemas tracked (DustForecastSchema,
+ForecastTargetSchema), all required guardrail fields present.
+`validate-boundaries` now scans 5 layered directories including
+the new `app/models/` peer.
 
 **Phase D - Mine State Engine.**
 Status: complete (2026-05-01). All four sub-steps shipped.

@@ -29,6 +29,7 @@ REQUIRED_ENDPOINTS = [
     ("/api/v1/zones", 200),
     ("/api/v1/haul-road-segments", 200),
     ("/api/v1/mine-state/current", 200),
+    ("/api/v1/forecasts/current", 200),
 ]
 
 PENDING_ENDPOINTS = [
