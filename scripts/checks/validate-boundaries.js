@@ -29,6 +29,12 @@ const RULES = [
   { from: 'app/domain',  forbidden: ['app.api'] },
   { from: 'app/schemas', forbidden: ['app.api', 'app.domain', 'app.storage'] },
   { from: 'app/audit',   forbidden: ['app.api'] },
+  // app/models/ is a Domain peer: implements model-contracts.md
+  // protocols against typed inputs only. It must not reach into the
+  // API layer (no request/response coupling) or the Storage layer
+  // (models are pure; persistence is the caller's job per
+  // model-contracts.md universal rule 5).
+  { from: 'app/models',  forbidden: ['app.api', 'app.storage'] },
 ];
 
 const IMPORT_RE = /^\s*(?:from\s+([\w.]+)|import\s+([\w.]+))/gm;
