@@ -19,6 +19,7 @@ from app.storage.models.mine_state import MineStateSnapshot
 from app.storage.models.model_performance import ModelPerformanceMetric
 from app.storage.models.outcomes import ActionOutcome
 from app.storage.models.readings import EquipmentActivity, SensorReading, WeatherReading
+from app.storage.models.receptor import PopulatedPlace
 from app.storage.models.recommendations import Recommendation
 from app.storage.models.simulations import InterventionSimulation
 from app.storage.models.site_config import SiteConfiguration
@@ -40,6 +41,7 @@ __all__ = [
     "Mine",
     "MineStateSnapshot",
     "ModelPerformanceMetric",
+    "PopulatedPlace",
     "Recommendation",
     "RecommendationApproval",
     "Sensor",

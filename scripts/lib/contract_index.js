@@ -75,6 +75,10 @@ const PHASE_K = [
   { entity: 'ShadowEvaluationResponse', schemaModule: 'app.schemas.shadow_mode',       schemaClass: 'ShadowEvaluationResponse',       model: null },
 ];
 
+const PHASE_L = [
+  { entity: 'PopulatedPlace',           schemaModule: 'app.schemas.receptor',          schemaClass: 'PopulatedPlaceSchema',           model: 'PopulatedPlace' },
+];
+
 const REPOSITORIES = [
   { name: 'SensorReadingRepository',         module: 'app.storage.repositories.sensor_readings' },
   { name: 'WeatherReadingRepository',        module: 'app.storage.repositories.weather_readings' },
@@ -96,8 +100,9 @@ const REPOSITORIES = [
   { name: 'AuditLogRepository',               module: 'app.storage.repositories.audit' },
   { name: 'ActionOutcomeRepository',          module: 'app.storage.repositories.outcomes' },
   { name: 'ModelPerformanceMetricRepository', module: 'app.storage.repositories.model_performance' },
+  { name: 'PopulatedPlaceRepository',         module: 'app.storage.repositories.receptor' },
 ];
 
-const ENTITIES = [...PHASE_B4, ...PHASE_C, ...PHASE_D, ...PHASE_E, ...PHASE_F, ...PHASE_G, ...PHASE_H, ...PHASE_I, ...PHASE_K];
+const ENTITIES = [...PHASE_B4, ...PHASE_C, ...PHASE_D, ...PHASE_E, ...PHASE_F, ...PHASE_G, ...PHASE_H, ...PHASE_I, ...PHASE_K, ...PHASE_L];
 
-module.exports = { PHASE_B4, PHASE_C, PHASE_D, PHASE_E, PHASE_F, PHASE_G, PHASE_H, PHASE_I, PHASE_K, ENTITIES, REPOSITORIES };
+module.exports = { PHASE_B4, PHASE_C, PHASE_D, PHASE_E, PHASE_F, PHASE_G, PHASE_H, PHASE_I, PHASE_K, PHASE_L, ENTITIES, REPOSITORIES };

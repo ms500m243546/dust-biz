@@ -35,9 +35,10 @@ const PYTHON_TOOLING = [
   { name: 'smoke',     script: 'checks/smoke.js' },
 ];
 
-// Contract validators (active from Phase B.4 onward)
+// Contract validators (active from Phase B.4 onward; data-source registry from Phase L)
 const CONTRACT_VALIDATORS = [
-  { name: 'validate-contracts',   script: 'checks/validate-contracts.js' },
+  { name: 'validate-contracts',     script: 'checks/validate-contracts.js' },
+  { name: 'validate-data-sources',  script: 'checks/validate-data-sources.js' },
 ];
 
 // Boundary, safety, and diff inspectors (active from Phase B.5 onward)
