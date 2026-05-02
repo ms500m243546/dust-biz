@@ -10,6 +10,7 @@ import app as app_pkg
 from app.api import API_PREFIX, API_VERSION
 from app.api.routes import (
     attributions,
+    auth,
     data_quality,
     dust_events,
     equipment_activity,
@@ -67,6 +68,7 @@ def create_app() -> FastAPI:
 
     fastapi_app.include_router(health.router, prefix=API_PREFIX, tags=["meta"])
     fastapi_app.include_router(meta.router, prefix=API_PREFIX, tags=["meta"])
+    fastapi_app.include_router(auth.router, prefix=API_PREFIX)
     fastapi_app.include_router(sensor_readings.router, prefix=API_PREFIX)
     fastapi_app.include_router(weather_readings.router, prefix=API_PREFIX)
     fastapi_app.include_router(equipment_activity.router, prefix=API_PREFIX)
