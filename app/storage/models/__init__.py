@@ -23,6 +23,7 @@ from app.storage.models.receptor import PopulatedPlace
 from app.storage.models.recommendations import Recommendation
 from app.storage.models.simulations import InterventionSimulation
 from app.storage.models.site_config import SiteConfiguration
+from app.storage.models.station_thresholds import StationThresholdOverride
 from app.storage.models.users import User
 
 __all__ = [
@@ -48,6 +49,7 @@ __all__ = [
     "SensorReading",
     "SiteConfiguration",
     "SourceAttribution",
+    "StationThresholdOverride",
     "User",
     "WeatherReading",
     "Zone",

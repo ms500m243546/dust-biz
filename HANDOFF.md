@@ -1,161 +1,176 @@
 # DustOps AI — Session Handoff
 
 **As of:** 2026-05-02
-**Active phase:** MVP-complete (Phase K landed end-to-end)
-**Last completed:** K — Feedback, Reporting, ROI (K.1 → K.2 → K.3 → K.4)
-**Validation gate:** `npm run agent-check` GREEN, **15 PASS / 0 SKIP / 0 FAIL**, 437 backend tests + 14 web tests, 3 happy-path smoke endpoints + 23 auth-gated rejections (the read-side auth gate landed in K.3)
+**Active phase:** L-complete (training-data ingest pipeline ready)
+**Last completed:** L — Public-data ingest pilot (Chile)
+**Validation gate:** `npm run agent-check` GREEN, **16 PASS / 0 SKIP / 0 FAIL**, 486 backend tests + 14 web tests
 
 ---
 
 ## State at handoff
 
-- `.progress_state.json`: `current_phase=MVP-complete`, `completed_phases=[A..K]`.
-- Working tree clean. Phase K commits since end of J:
-  - `0833278` Phase K.1 — S14 outcome-join + model performance metrics
-  - `<k2>` Phase K.2 — S15 reports (model-performance / ROI / compliance)
-  - `<k3>` Phase K.3 — Hardening (auth gate / JWT rotation / scheduler / GeoJSON)
-  - `<k4>` Phase K.4 — Shadow-mode evaluation harness + MVP-complete advance
-- Rollback log: `phase-k1-pre`, `phase-k1-s14`, `phase-k2-pre`,
-  `phase-k2-reports`, `phase-k3-hardening`.
-- Memory: `project_phase_k1_complete.md` is the K.1 entry; the next session
-  should land a `project_mvp_complete.md` superseding it.
+- `.progress_state.json`: `current_phase=L-complete`,
+  `completed_phases=[A..L]`.
+- Working tree clean. Phase L commits since MVP-complete:
+  - `<L.1>` Phase L.1 — Data-source registry + receptor schema + connector scaffold
+  - `<L.2>` Phase L.2 — SINCA connector
+  - `<L.3>` Phase L.3 — Weather connectors (ERA5 / DGA / Open-Meteo)
+  - `<L.4>` Phase L.4 — OSM mine geometry + INE populated places + RCA seed doc
+  - `<L.5>` Phase L.5 — `operator_real` source hook + fleet calibration
+  - `<L.6>` Phase L.6 — Per-station thresholds + first model_performance_metrics row
+- Rollback log: `phase-l1-pre`, `phase-l1-registry`, `phase-l2-sinca`,
+  `phase-l3-weather`, `phase-l4-osm-ine-rca`, `phase-l5-operator-real`,
+  `phase-l6-station-thresholds`.
 
-## What shipped in Phase K (K.1 → K.4)
+## Strategic priority pinned
 
-### K.1 — S14 outcome-join + model performance metrics
+DustOps targets **Chilean copper mines with adjacent towns**. Pilot is
+**Los Pelambres** (insider access path via the new `operator_real`
+source discriminator); #2 is **Los Bronces** (Andes, 3,500 m, ERA5
+load-bearing because surface met under-represents the operating regime).
 
-| Slice | Files |
-|---|---|
-| ORM | `app/storage/models/model_performance.py` (`ModelPerformanceMetric`, append-only) |
-| Repo | `app/storage/repositories/model_performance.py` |
-| Schemas | `app/schemas/model_performance.py` (`TrainingRecordSchema`, `ModelPerformanceMetricSchema`, `EvaluateModelRequest`) |
-| Domain | `app/domain/training_data.py` (S14 join), `app/domain/model_performance.py` (heuristic metric_payload) |
-| Routes | `GET /training-data`, `GET /model-performance`, role-gated `POST /model-performance/evaluate` |
+## What shipped in Phase L
 
-Closes the predicted-vs-actual loop. Avoided-shutdowns counted only on
-operator-approved/overridden FPs (correlation, not causal).
+### L.1 — Registry + receptor scaffold
+- `docs/data-source-registry.md` — canonical inventory of every public
+  source (SINCA / community stations / ERA5 / DGA / Open-Meteo / OSM /
+  INE / SEA / SMA / CMF), license table, refresh cadence policy
+- `app/schemas/receptor.py` + `PopulatedPlace` ORM + repository — population
+  exposure as a first-class layer
+- `app/ingestion/public/__init__.py` — `Connector` protocol (pure fetcher,
+  no DB writes)
+- `app/ingestion/public/cache.py` — disk cache keyed by
+  (source, window, filter-hash)
+- `scripts/checks/validate-data-sources.js` — registry/connector drift
+  protection; agent-check now 16/16
 
-### K.2 — S15 reports
+### L.2 — SINCA
+- `app/ingestion/public/sinca.py` — parses MMA's CSV format (semicolon
+  delimiter, European decimal commas, `S/I` / `NA` sentinel rows,
+  `validated` flag)
+- Maps to K.2-compatible `pm10_ugm3` / `pm25_ugm3` keys
+- Quality hint: regulator-grade EMRPM stations → 0.9, indicative → 0.7
+- Fixture: Cuncumén (Los Pelambres receptor) — closest community
+  monitor to the El Mauro tailings dam
 
-| Slice | Files |
-|---|---|
-| Schema additions | `app/schemas/site_config.py` adds `cost_curves` (default `tonne_value_usd=80`) |
-| ORM | `SiteConfiguration.cost_curves` JSON column |
-| Schemas | `app/schemas/reports.py` (`ModelPerformanceReport`, `ROIReport`, `ComplianceReport`) |
-| Domain | `app/domain/reports.py` — pure aggregations |
-| Routes | `GET /reports/model-performance`, `GET /reports/roi`, `GET /reports/compliance` |
+### L.3 — Weather (ERA5 + DGA + Open-Meteo)
+- `app/ingestion/public/era5.py` — primary for high-altitude mines.
+  Combines u10/v10 wind components into speed + meteorological "from"
+  direction. Parses pre-extracted JSON (orchestrator handles
+  cdsapi/xarray)
+- `app/ingestion/public/dga.py` — Chilean hydromet for valley receptors
+- `app/ingestion/public/open_meteo.py` — global free fallback. Tagged
+  CC-BY-NC; **production must swap to ERA5**
 
-Closes G3-R1, J1-R3 (ROI), J1-R4 (per-site PM thresholds in compliance).
+### L.4 — OSM + INE + RCA seed
+- `app/ingestion/public/osm_mine.py` — Overpass parser. Classifies ways
+  (`landuse=quarry` → pit Polygon; `highway=service service=mine` →
+  haul-road LineString). Closes unclosed pit rings per K.3 GeoJSON contract
+- `app/ingestion/public/ine_populated_places.py` — parses INE place
+  exports + computes haversine distance + initial bearing from each
+  mine centroid; output validates against `PopulatedPlaceSchema`
+- `docs/rca-seed.md` — provenance for **Los Pelambres** (RCA 38/1997
+  + El Mauro consent + Caimanes case + supreme court rulings) and
+  **Los Bronces** (RCA 391/2007 + 2020 Integrado rejection at Comité
+  de Ministros + Santiago PPDA stricter regime). Cites SEA / SMA URLs
 
-### K.3 — Hardening
+### L.5 — Operator-real hook
+- `app/ingestion/fleet_specs.py` — `FleetSpec` calibrated to public
+  OEM data (CAT 793F: 218t / 20–40 km/h; Komatsu 930E: 290t; CAT 6030
+  shovel: 37t/pass). Sources cited
+- `app/ingestion/operator_real.py` — format-agnostic adapter with
+  `FieldMap` (dotted-path lookups for nested operator JSON).
+  Discriminator `"operator_real"`; sensor records get
+  `source_quality_hint=1.0`
+- This is the slot Los Pelambres insider data lands in — **domain
+  layer doesn't know whether the data is SINCA / mock / operator_real**
 
-| Slice | Files |
-|---|---|
-| Read-side auth gate | `app/api/main.py` mounts every non-health/meta/auth router with `dependencies=[Depends(current_user)]` (closes I1-R1) |
-| JWT/JWKS rotation | `app/domain/auth.py:KeyRing` (`add` / `rotate` / `prune` / `metadata`); tokens carry `kid`; `GET /auth/keys` exposes metadata only (closes I2-R1) |
-| Scheduler | `app/domain/scheduler.py` — stdlib in-process tick scheduler with `approval_expiry_sweep` + `keyring_prune` jobs; opt-in via `DUSTOPS_SCHEDULER_ENABLED` (closes I3-R1, F1-R1) |
-| GeoJSON | `Zone.geometry` (Polygon) + `HaulRoadSegment.geometry` (LineString) with strict ring/lon-lat validators (closes D3-R3, J1-R2) |
-| Postgres readiness | `Settings.database_url` documented as the swap point; ORM uses dialect-agnostic types only; SQLite remains the dev/test default (partial close on D3-R2 / I5-R1) |
-
-### K.4 — Shadow-mode evaluation harness
-
-| Slice | Files |
-|---|---|
-| Domain | `app/domain/shadow_mode.py:evaluate_shadow` — pure comparison over the K.1 join + K.1 metrics |
-| Schemas | `app/schemas/shadow_mode.py` (`ShadowEvaluationRequest`/`Response`) |
-| Route | role-gated `POST /shadow-mode/evaluate` returning candidate vs production metrics, deltas, and a `recommendation` in `{promote, hold, regress}` |
-
-Promotion remains an explicit human action (the harness only recommends;
-the operator calls `app.models.registry.set_current` to actually flip
-the live pointer — conservative posture per G13).
+### L.6 — Per-station thresholds + first metrics row
+- `StationThresholdOverride` ORM + repo + schema — per-sensor PM
+  threshold overrides for RCA-mandated stricter community-receptor
+  limits (Cuncumén / Caimanes / Salamanca / Las Condes / Lo Barnechea)
+- `build_compliance_report` in `app/domain/reports.py` extended with a
+  `station_overrides` parameter; missing entries fall back to site
+  defaults; `None` values inside an override fall back per-field
+- `tests/integration/test_training_pipeline_e2e.py` — proves the full
+  pipeline (predictions → recommendations → approvals → outcomes →
+  K.1 join → K.1 aggregator → persisted `model_performance_metrics`
+  row) works end-to-end. **First real metrics row deliverable.**
 
 ## Architecture as it stands
 
 ```
-   UI  →  web/                            React 18 + TS strict + Vite (J)
-                                          ├ Auth, 4 operator views, ROI/compliance views ready for K.2 wiring
-                                          └ Web validators in agent-check
-
-   API →  app/api/routes/   31 router groups now:
-            health · meta · auth (open by design)
-            sensor_readings · weather_readings · equipment_activity ·
-            data_quality · site_config · zones · haul_road_segments ·
-            mine_state · forecasts · dust_events · attributions ·
-            interventions · simulations · recommendations · approvals ·
-            outcomes · audit · training_data · model_performance ·
-            reports · shadow_mode               (auth-gated by router-level dep)
-            │
-   Domain →  features · forecasting · attribution · dust_events ·
-            interventions · simulation · recommendations · approvals ·
-            outcomes · auth · scheduler · training_data ·
-            model_performance · reports · shadow_mode
-            │
-   Models →  registry · forecasting · attribution · intervention · cost · optimization
-            │
-   Storage →  20 repositories
+   UI (J)    →  web/                          React 18 + TS strict
+   API (K.3) →  31 router groups, all auth-gated except health/meta/auth
+   Domain    →  ... + reports + shadow_mode + scheduler + training_data + model_performance
+   Ingestion →  app/ingestion/
+                ├ public/                     L.1+ Connector protocol
+                │   ├ sinca.py                L.2 — Chile MMA PM
+                │   ├ era5.py / dga.py / open_meteo.py    L.3 — weather
+                │   ├ osm_mine.py             L.4 — pit + haul-road geometry
+                │   ├ ine_populated_places.py L.4 — receptor metadata
+                │   └ cache.py                L.1 — disk cache
+                ├ operator_real.py            L.5 — partner data slot
+                ├ fleet_specs.py              L.5 — OEM calibration
+                └ mock_streams.py             B.5 — dev/test fallback
+   Storage   →  21 repositories + alembic-ready settings (K.3)
 ```
 
-`validate-boundaries` clean across 96 Python files; `validate-safety` covers 11 schemas; `validate-contracts` checks 30 entities + 20 repositories.
+`validate-contracts` checks 32 entities + 22 repositories. The
+`validate-data-sources` check enforces the registry doc and the
+connector modules stay in sync.
 
-## MVP acceptance — checked against PLAN.md §"MVP acceptance"
-
-1. Mock data drives the loop end-to-end → seeded via `scripts/seed_mock_data.py`. ✓
-2. Forecasts include confidence + model_version + reason. ✓ (validate-safety)
-3. Attribution ranks likely sources with reasons. ✓
-4. ≥ 3 intervention options can be simulated. ✓
-5. Recommendations ranked by dust reduction + production impact. ✓
-6. Human can approve / reject / override. ✓
-7. Outcomes recorded; predicted-vs-actual tracked (S14 join). ✓ K.1
-8. Shadow mode supported. ✓ K.4
-9. No high-impact action executes without approval (G1, G13). ✓
-10. Validation gate green. ✓ 15/15
-
-## Open risks at MVP-complete
+## Open work
 
 | ID | Severity | Summary | Notes |
 |---|---|---|---|
-| K1-R1 | low | `Recommendation.linked_prediction_ids` JSON-list scan in Python | Resolves with full Postgres swap (GIN index on JSON) |
-| K1-R2 | low | Manual evaluate cadence; scheduler jobs configured but evaluate not auto-fired | Add `model_performance_evaluate` job to scheduler when sites want nightly cadence |
-| K1-R3 | low | Avoided-shutdown is correlation-only by design | Documented in `app/domain/model_performance.py` |
-| D3-R2 / I5-R1 | medium-latent | SQLite still the default in-tree | Production deploys swap via `DUSTOPS_DATABASE_URL`; alembic migrations not yet authored — first migration delta should snapshot current schema |
-| G2-R1 / E2-R1 / F3-R2 | medium-latent | Heuristic models uncalibrated | Train real models in a follow-up; the K.1 metric writer is the calibration scoreboard |
+| L1 | low | SINCA connector's live HTTP path is intentionally not in this module | Wire from orchestrator script when partner data arrives |
+| L2 | low | Open-Meteo CC-BY-NC license blocks production deployment | Swap to ERA5 (commercial-safe) before any paying customer |
+| L3 | medium | RCA digitization in `docs/rca-seed.md` is provenance only — actual `SiteConfiguration` + `StationThresholdOverride` rows must be hand-loaded by the orchestrator | Two-person review per mine; cite source URL on every row |
+| L4 | low | Pit centroids in `rca-seed.md` are approximate placeholders | Replace with surveyed values when partnership lands |
+| L5 | medium-latent | The K.6 integration test seeds synthetic data; no real-data round-trip yet | First real round-trip happens when the orchestrator writes a SINCA fetch into the DB and the K.1 evaluator runs against it |
+| K1-R1 | low | Recommendation.linked_prediction_ids JSON-list scan | Resolves with Postgres GIN index |
 
 ## How to resume next session
 
-1. `python progress.py` should print `current phase: MVP-complete`.
-2. `npm run agent-check` should print `15 PASS / 0 SKIP / 0 FAIL`.
-3. If new work is "calibrate models" — point at `model_performance_metrics`
-   rows; the K.1 writer is the calibration source-of-truth.
-4. If new work is "production deploy" — author the first alembic migration
-   from current schema, swap `DUSTOPS_DATABASE_URL` to Postgres, set
-   `DUSTOPS_SCHEDULER_ENABLED=true`, and rotate `DUSTOPS_AUTH_SECRET` via
-   the `KeyRing.rotate` API.
-5. If new work is "wire reports into the dashboard" — `web/` already has
-   the placeholder ROI/compliance views; add typed fetchers against the
-   K.2 endpoints (`/reports/model-performance`, `/reports/roi`,
-   `/reports/compliance`) and follow the J-deslop lesson: read field
-   names from `app/schemas/reports.py`, do not invent.
+1. `python progress.py` → `current phase: L-complete`.
+2. `npm run agent-check` → `16 PASS / 0 SKIP / 0 FAIL`.
+3. **Next concrete step (operator decides):**
+   - **(a) First real SINCA pull** — write the orchestrator HTTP shim
+     in `scripts/seed_public_data.py`, hit Cuncumén EMRPM for the
+     last 24h, persist via `RawSensorReadingSchema`, observe the
+     records appear in the existing K.2 compliance report.
+   - **(b) First real ERA5 pull** — register a Copernicus CDS account,
+     download a NetCDF for the Los Pelambres bounding box, run the
+     pre-extract step, feed JSON to `app/ingestion/public/era5.py`.
+   - **(c) Partner data onboarding for Los Pelambres** — once contracts
+     allow, define a `FieldMap` for the operator's dispatch system
+     and start replaying historical telematics through
+     `app/ingestion/operator_real.py`.
+   - **(d) Hand-digitize the first batch of RCA receptor rows** for
+     Los Pelambres + Los Bronces (orchestrator script + provenance
+     review).
+4. The K.1 metric scoreboard becomes load-bearing the moment **any** of
+   (a)–(d) flow through the existing pipeline.
 
-## Lessons encoded into the normalization report
+## Lessons encoded
 
-- **TS wire types must be read from `app/schemas/`, not authored
-  speculatively.** Phase J deslop was a one-shot lesson; K.1 + K.2 added
-  the matching TS exposure work as a backlog note for the dashboard
-  wiring follow-up.
-- **Date-relative test fixtures rot.** A pre-existing
-  `test_dust_events.py` fixture using a hardcoded `2026-05-01` timestamp
-  broke on day+1; fixed in K.1. New tests use `datetime.now(UTC) - delta`.
-- **SQLite dev DB does not auto-migrate when a column is added.** When
-  `cost_curves` landed in K.2, the on-disk `dustops.db` had to be
-  deleted so `Base.metadata.create_all` recreated it with the new
-  column. Production deploys use alembic — this hazard is dev-local only.
+- **License obligations live in the registry doc, not the connector
+  code.** The dashboard footer must surface OSM / Copernicus / INE
+  attributions when L.4 data appears in the UI.
+- **Connectors are pure parsers.** Live HTTP is the orchestrator's
+  job — keeps tests deterministic and connectors swappable per
+  source format.
+- **`source_quality_hint` is the L-era reliability signal.** SINCA
+  EMRPM = 0.9, indicative = 0.7, operator_real = 1.0, mock = 0.9.
+  S2 data-quality propagates this into downstream confidence.
 
 ## Key references
 
-- Master plan: `PLAN.md`
+- Master plan: `PLAN.md` (Phase L documented in `docs/normalization_report.md` change log)
 - Operating contract: `docs/architect_protocol.md`
-- Subsystem contracts: `docs/subsystem-contracts.md` (S14 + S15 are now live)
+- Data-source registry: `docs/data-source-registry.md` (THE Phase L contract)
+- RCA seed provenance: `docs/rca-seed.md`
+- Subsystem contracts: `docs/subsystem-contracts.md` (S1-S16 unchanged)
 - Data contracts: `docs/data-contracts.md`
-- Model contracts: `docs/model-contracts.md` (lifecycle step 5 — shadow eval — is now usable end-to-end)
-- Safety guardrails: `docs/safety-guardrails.md`
-- Phase change log: `docs/normalization_report.md`
+- Model contracts: `docs/model-contracts.md`

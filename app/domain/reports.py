@@ -187,12 +187,22 @@ def build_compliance_report(
     window_from: datetime,
     window_to: datetime,
     site_id: str | None = None,
+    station_overrides: dict[str, dict[str, float | None]] | None = None,
 ) -> ComplianceReport:
-    """PM exceedance counts per station against site-specific limits."""
-    pm10_breach = float(pm10_thresholds.get("breach", 150.0))
-    pm25_breach = float(pm25_thresholds.get("breach", 35.0))
-    pm10_warn = float(pm10_thresholds.get("warning", 100.0))
-    pm25_warn = float(pm25_thresholds.get("warning", 25.0))
+    """PM exceedance counts per station against site-specific limits.
+
+    Phase L.6: when `station_overrides` carries an entry for a sensor
+    (RCA-mandated stricter limits at community receptors), the per-
+    station thresholds override the site defaults for that station
+    only. Sites without an override fall back to `pm10_thresholds` /
+    `pm25_thresholds`.
+    """
+    site_pm10_breach = float(pm10_thresholds.get("breach", 150.0))
+    site_pm25_breach = float(pm25_thresholds.get("breach", 35.0))
+    site_pm10_warn = float(pm10_thresholds.get("warning", 100.0))
+    site_pm25_warn = float(pm25_thresholds.get("warning", 25.0))
+
+    overrides = station_overrides or {}
 
     entries: list[ComplianceReportEntry] = []
     for sid in sorted(set(sensor_ids)):
@@ -207,6 +217,12 @@ def build_compliance_report(
                 pm10s.append(float(pm10))
             if isinstance(pm25, int | float) and not isinstance(pm25, bool):
                 pm25s.append(float(pm25))
+
+        ov = overrides.get(sid, {})
+        pm10_breach = float(ov.get("pm10_breach_ugm3") or site_pm10_breach)
+        pm25_breach = float(ov.get("pm25_breach_ugm3") or site_pm25_breach)
+        pm10_warn = float(ov.get("pm10_warning_ugm3") or site_pm10_warn)
+        pm25_warn = float(ov.get("pm25_warning_ugm3") or site_pm25_warn)
 
         entries.append(
             ComplianceReportEntry(

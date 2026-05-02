@@ -76,7 +76,8 @@ const PHASE_K = [
 ];
 
 const PHASE_L = [
-  { entity: 'PopulatedPlace',           schemaModule: 'app.schemas.receptor',          schemaClass: 'PopulatedPlaceSchema',           model: 'PopulatedPlace' },
+  { entity: 'PopulatedPlace',              schemaModule: 'app.schemas.receptor',            schemaClass: 'PopulatedPlaceSchema',            model: 'PopulatedPlace' },
+  { entity: 'StationThresholdOverride',    schemaModule: 'app.schemas.station_thresholds',  schemaClass: 'StationThresholdOverrideSchema', model: 'StationThresholdOverride' },
 ];
 
 const REPOSITORIES = [
@@ -100,7 +101,8 @@ const REPOSITORIES = [
   { name: 'AuditLogRepository',               module: 'app.storage.repositories.audit' },
   { name: 'ActionOutcomeRepository',          module: 'app.storage.repositories.outcomes' },
   { name: 'ModelPerformanceMetricRepository', module: 'app.storage.repositories.model_performance' },
-  { name: 'PopulatedPlaceRepository',         module: 'app.storage.repositories.receptor' },
+  { name: 'PopulatedPlaceRepository',           module: 'app.storage.repositories.receptor' },
+  { name: 'StationThresholdOverrideRepository', module: 'app.storage.repositories.station_thresholds' },
 ];
 
 const ENTITIES = [...PHASE_B4, ...PHASE_C, ...PHASE_D, ...PHASE_E, ...PHASE_F, ...PHASE_G, ...PHASE_H, ...PHASE_I, ...PHASE_K, ...PHASE_L];

@@ -47,6 +47,7 @@ from app.storage.models import (
     ModelPerformanceMetric,
     Sensor,
     SensorReading,
+    StationThresholdOverride,
     User,
 )
 from app.storage.repositories.site_config import SiteConfigRepository
@@ -156,6 +157,23 @@ def compliance_report(
     events_stmt = select(DustEvent).where(DustEvent.detected_at >= window_from)
     events = list(session.execute(events_stmt).scalars())
 
+    overrides: dict[str, dict[str, float | None]] = {}
+    if sensor_ids:
+        ov_rows = list(
+            session.execute(
+                select(StationThresholdOverride).where(
+                    StationThresholdOverride.sensor_id.in_(sensor_ids)
+                )
+            ).scalars()
+        )
+        for o in ov_rows:
+            overrides[o.sensor_id] = {
+                "pm10_breach_ugm3": o.pm10_breach_ugm3,
+                "pm10_warning_ugm3": o.pm10_warning_ugm3,
+                "pm25_breach_ugm3": o.pm25_breach_ugm3,
+                "pm25_warning_ugm3": o.pm25_warning_ugm3,
+            }
+
     return build_compliance_report(
         sensor_ids=sensor_ids,
         readings_by_sensor=_bucket_readings(readings),
@@ -166,4 +184,5 @@ def compliance_report(
         window_from=window_from,
         window_to=now,
         site_id=site_id,
+        station_overrides=overrides,
     )
