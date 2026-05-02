@@ -21,35 +21,35 @@ from app.api.main import app
 REQUIRED_ENDPOINTS = [
     ("/api/v1/health", 200),
     ("/api/v1/meta", 200),
-    ("/api/v1/sensor-readings", 200),
-    ("/api/v1/weather-readings", 200),
-    ("/api/v1/equipment-activity", 200),
-    ("/api/v1/data-quality", 200),
-    ("/api/v1/site-config", 200),
-    ("/api/v1/zones", 200),
-    ("/api/v1/haul-road-segments", 200),
-    ("/api/v1/mine-state/current", 200),
-    ("/api/v1/forecasts/current", 200),
-    ("/api/v1/dust-events", 200),
-    ("/api/v1/attributions", 200),
-    ("/api/v1/interventions", 200),
-    ("/api/v1/simulations", 200),
-    ("/api/v1/recommendations", 200),
-    ("/api/v1/recommendations/current", 200),
+    ("/api/v1/auth/keys", 200),
 ]
 
-# Phase I auth-gated endpoints - smoke asserts they reject anonymous
-# callers, which is the actual contract change. Listed separately so
-# the success count above stays meaningful and so the gating is
-# explicit.
+# Phase K.3: read-side auth gate. Every router except health / meta /
+# auth requires an authenticated user. Anonymous GETs must 401.
 AUTH_GATED_ENDPOINTS = [
     ("/api/v1/auth/me", 401),
+    ("/api/v1/sensor-readings", 401),
+    ("/api/v1/weather-readings", 401),
+    ("/api/v1/equipment-activity", 401),
+    ("/api/v1/data-quality", 401),
+    ("/api/v1/site-config", 401),
+    ("/api/v1/zones", 401),
+    ("/api/v1/haul-road-segments", 401),
+    ("/api/v1/mine-state/current", 401),
+    ("/api/v1/forecasts/current", 401),
+    ("/api/v1/dust-events", 401),
+    ("/api/v1/attributions", 401),
+    ("/api/v1/interventions", 401),
+    ("/api/v1/simulations", 401),
+    ("/api/v1/recommendations", 401),
+    ("/api/v1/recommendations/current", 401),
     ("/api/v1/action-outcomes", 401),
     ("/api/v1/training-data", 401),
     ("/api/v1/model-performance", 401),
     ("/api/v1/reports/model-performance", 401),
     ("/api/v1/reports/roi", 401),
     ("/api/v1/reports/compliance", 401),
+    ("/api/v1/audit", 401),
 ]
 
 PENDING_ENDPOINTS: list[tuple[str, str]] = []

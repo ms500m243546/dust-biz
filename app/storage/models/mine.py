@@ -48,6 +48,7 @@ class Zone(Base):
     dust_generation_baseline: Mapped[str] = mapped_column(String, nullable=False)
     allowed_interventions: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
     requires_approval_for: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    geometry: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
 
     mine: Mapped[Mine] = relationship(back_populates="zones")
 
@@ -89,5 +90,6 @@ class HaulRoadSegment(Base):
     surface_type: Mapped[str] = mapped_column(String, nullable=False)
     last_watered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_graded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    geometry: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
 
     mine: Mapped[Mine] = relationship(back_populates="haul_road_segments")
