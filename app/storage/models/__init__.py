@@ -16,6 +16,7 @@ from app.storage.models.ingest_errors import IngestError
 from app.storage.models.interventions import InterventionOption
 from app.storage.models.mine import Equipment, HaulRoadSegment, Mine, Sensor, Zone
 from app.storage.models.mine_state import MineStateSnapshot
+from app.storage.models.outcomes import ActionOutcome
 from app.storage.models.readings import EquipmentActivity, SensorReading, WeatherReading
 from app.storage.models.recommendations import Recommendation
 from app.storage.models.simulations import InterventionSimulation
@@ -23,6 +24,7 @@ from app.storage.models.site_config import SiteConfiguration
 from app.storage.models.users import User
 
 __all__ = [
+    "ActionOutcome",
     "AuditLog",
     "Base",
     "DustEvent",
