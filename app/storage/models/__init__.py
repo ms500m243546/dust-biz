@@ -15,6 +15,7 @@ from app.storage.models.interventions import InterventionOption
 from app.storage.models.mine import Equipment, HaulRoadSegment, Mine, Sensor, Zone
 from app.storage.models.mine_state import MineStateSnapshot
 from app.storage.models.readings import EquipmentActivity, SensorReading, WeatherReading
+from app.storage.models.recommendations import Recommendation
 from app.storage.models.simulations import InterventionSimulation
 from app.storage.models.site_config import SiteConfiguration
 
@@ -31,6 +32,7 @@ __all__ = [
     "InterventionSimulation",
     "Mine",
     "MineStateSnapshot",
+    "Recommendation",
     "Sensor",
     "SensorReading",
     "SiteConfiguration",
