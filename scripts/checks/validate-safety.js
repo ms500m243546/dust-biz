@@ -41,6 +41,12 @@ const SAFETY_RELEVANT_PATTERNS = [
   { kind: 'Recommendation', require: ['confidence', 'reason', 'model_version'] },
   { kind: 'Attribution',    require: ['confidence'] },
   { kind: 'Simulation',     require: ['confidence'] },
+  // Phase I additions: every approval / outcome record must declare
+  // who decided (recorded_by / approved_by) and what they decided
+  // (approval_status / intervention_effectiveness) so G8/G9 hold at
+  // the schema level.
+  { kind: 'ApprovalSchema', require: ['approval_status', 'approved_by', 'decided_at'] },
+  { kind: 'ActionOutcome',  require: ['intervention_effectiveness'] },
 ];
 
 const FORBIDDEN_SUBSTRINGS = [

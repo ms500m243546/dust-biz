@@ -57,6 +57,14 @@ const PHASE_H = [
   { entity: 'Recommendation',         schemaModule: 'app.schemas.recommendations', schemaClass: 'RecommendationSchema',       model: 'Recommendation' },
 ];
 
+const PHASE_I = [
+  { entity: 'User',                    schemaModule: 'app.schemas.auth',      schemaClass: 'UserSchema',                    model: 'User' },
+  { entity: 'RecommendationApproval',  schemaModule: 'app.schemas.approvals', schemaClass: 'RecommendationApprovalSchema',  model: 'RecommendationApproval' },
+  // AuditLog is repo-only at I (no Pydantic wire schema yet); the
+  // AuditLogRepository entry below covers the contract-presence check.
+  { entity: 'ActionOutcome',           schemaModule: 'app.schemas.outcomes',  schemaClass: 'ActionOutcomeSchema',           model: 'ActionOutcome' },
+];
+
 const REPOSITORIES = [
   { name: 'SensorReadingRepository',         module: 'app.storage.repositories.sensor_readings' },
   { name: 'WeatherReadingRepository',        module: 'app.storage.repositories.weather_readings' },
@@ -73,8 +81,12 @@ const REPOSITORIES = [
   { name: 'InterventionOptionRepository',    module: 'app.storage.repositories.interventions' },
   { name: 'InterventionSimulationRepository', module: 'app.storage.repositories.simulations' },
   { name: 'RecommendationRepository',         module: 'app.storage.repositories.recommendations' },
+  { name: 'UserRepository',                   module: 'app.storage.repositories.users' },
+  { name: 'RecommendationApprovalRepository', module: 'app.storage.repositories.approvals' },
+  { name: 'AuditLogRepository',               module: 'app.storage.repositories.audit' },
+  { name: 'ActionOutcomeRepository',          module: 'app.storage.repositories.outcomes' },
 ];
 
-const ENTITIES = [...PHASE_B4, ...PHASE_C, ...PHASE_D, ...PHASE_E, ...PHASE_F, ...PHASE_G, ...PHASE_H];
+const ENTITIES = [...PHASE_B4, ...PHASE_C, ...PHASE_D, ...PHASE_E, ...PHASE_F, ...PHASE_G, ...PHASE_H, ...PHASE_I];
 
-module.exports = { PHASE_B4, PHASE_C, PHASE_D, PHASE_E, PHASE_F, PHASE_G, PHASE_H, ENTITIES, REPOSITORIES };
+module.exports = { PHASE_B4, PHASE_C, PHASE_D, PHASE_E, PHASE_F, PHASE_G, PHASE_H, PHASE_I, ENTITIES, REPOSITORIES };

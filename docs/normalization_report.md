@@ -8,8 +8,58 @@ phase.
 
 ## Active phase
 
-**Phase I - Human Approval Workflow.**
+**Phase J - Dashboard.**
 Status: pending plan/approval. See `PLAN.md`.
+
+**Phase I - Human Approval Workflow.**
+Status: complete (2026-05-01). All five sub-steps shipped.
+- I.1: Auth foundation. `User` ORM/repo, `LoginRequest`/`TokenResponse`/
+  `UserSchema`, `app/domain/auth.py` (PBKDF2-HMAC-SHA256 password
+  hashing + HMAC-signed bearer tokens, stdlib only - no new deps).
+  `current_user` + `require_role(*roles)` deps in
+  `app/api/dependencies/auth.py`. `POST /auth/login` and `GET /auth/me`
+  endpoints. 330 tests.
+- I.2: Approval + audit storage. `RecommendationApproval` and
+  `AuditLog` ORMs/repos per data-contracts.md lines 207-217 and
+  264-270. `RecommendationApprovalSchema` carries the
+  Recommendation-prefix safety triple (`confidence`/`reason`/
+  `model_version` copied for audit at decision time) so
+  `validate-safety` admits it. `app/audit/__init__.py` stub replaced
+  with `app/audit/writer.py` (`record(actor, action, entity_type,
+  entity_id, payload)`). 338 tests; 8 safety schemas tracked.
+- I.3: S13 domain + endpoints + auth gating.
+  `app/domain/approvals.py:approve_recommendation /
+  reject_recommendation / override_recommendation / sweep_expired /
+  latest_for_recommendation` enforces G1 (medium/high `risk_class`
+  blocks the approve path), G8 (every decision persisted - including
+  `expired`), G9 (override captures who/when/what/why), G13 (high
+  `risk_class` cannot auto-execute - HighRiskAutoExecutionError).
+  Lazy expiry: `now >= rec.issued_at + approval_expiry_minutes`
+  records an `expired` row instead of accepting; manual sweep
+  endpoint covers undecided pending recs (F1-R1 scheduler still
+  open). `POST /recommendations/{id}/approve|reject|override`,
+  `GET /recommendations/{id}/approval`, `GET /approvals`,
+  admin-only `POST /approvals/sweep-expired`. Auth dep wired onto
+  16 mutating handlers across 11 routers (closes write-side of
+  D2-R1 / E4-R2 / F4-R1 / G4-R1 / H1-R1). `SiteConfig` gains
+  `approval_expiry_minutes` (default 15). Touches a safety-reviewer
+  trigger path (`app/domain/approvals/` is new + `app/audit/`).
+  361 tests.
+- I.4: Outcome capture / S14 feeder. `ActionOutcome` ORM/schema/repo,
+  `app/domain/outcomes.py:record_outcome` (audit-logged, validates
+  recommendation_id and prediction_id when supplied),
+  `POST /api/v1/action-outcomes` (env_manager / ops_manager / admin),
+  GET listing + per-recommendation history. Phase K's full
+  predicted-vs-actual join (S14) reads these rows. 371 tests.
+- I.5: Validation, smoke promotion, phase advance. `validate-safety`
+  extended with two new patterns (`*ApprovalSchema` requires
+  `approval_status`/`approved_by`/`decided_at`; `*ActionOutcome*`
+  requires `intervention_effectiveness`); 11 safety-relevant schemas
+  tracked. Contract index PHASE_I adds User /
+  RecommendationApproval / ActionOutcome entities + four new
+  repositories. Smoke now asserts 17 happy-path endpoints AND that
+  3 auth-gated endpoints reject anonymous callers (`GET /auth/me`,
+  `GET /action-outcomes`, `POST /auth/login` with unknown user).
 
 **Phase H - Recommendation Engine.**
 Status: complete (2026-05-01). All four sub-steps shipped.
@@ -450,6 +500,37 @@ exist yet.
 ---
 
 ## Risks (open)
+
+### Phase I additions
+
+- **I1-R1 (medium):** Read-side endpoints stay open in MVP; only
+  mutating handlers (16 across 11 routers + the new approval/outcome
+  endpoints) are gated. Documented intentional gap; closes in K
+  hardening pass alongside D3-R2 Postgres swap.
+- **I2-R1 (low):** JWT-style token signing key rotates on process
+  restart in dev (`secrets.token_hex(32)` fallback when
+  `DUSTOPS_AUTH_SECRET` is unset). Acceptable at MVP; rotation /
+  JWKS endpoint deferred to K.
+- **I3-R1 (low):** Approval expiry is lazy (fires on next decision
+  attempt) plus a manual sweep endpoint. F1-R1 already tracks the
+  background-scheduler gap.
+- **I3-R2 (low):** `override_action` is free-text per data contract;
+  not validated against the S8 catalog. Tighten if a downstream
+  consumer depends on it.
+- **I4-R1 (medium-latent):** Outcome capture is manual entry only;
+  no telemetry-driven auto-fill. S14 (Phase K) closes via
+  prediction-vs-actual join.
+- **I5-R1 (low):** `audit_logs` table grows unbounded on SQLite.
+  Acceptable on MVP; partition / rollover when D3-R2 (Postgres swap)
+  lands.
+
+### Phase I closures (write-side)
+
+- **D2-R1 / E4-R2 / F4-R1 / G4-R1 / H1-R1** all reduce to "read-side
+  open" once Phase I.3 lands. The cluster is now I1-R1 (single
+  open risk against read paths).
+- **G3-R2** (default effective duration is rule of thumb) - reclassified
+  in H to "intentional MVP design" and remains so.
 
 ### D-R1 - In-flight site_config files were edited without a prior snapshot
 Severity: medium -> CLOSED (2026-05-01).
