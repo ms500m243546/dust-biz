@@ -38,6 +38,7 @@ from app.api.routes import (
     recommendations,
     reports,
     sensor_readings,
+    shadow_mode,
     simulations,
     site_config,
     training_data,
@@ -123,6 +124,7 @@ def create_app() -> FastAPI:
     fastapi_app.include_router(training_data.router, prefix=API_PREFIX, dependencies=auth_dep)
     fastapi_app.include_router(model_performance.router, prefix=API_PREFIX, dependencies=auth_dep)
     fastapi_app.include_router(reports.router, prefix=API_PREFIX, dependencies=auth_dep)
+    fastapi_app.include_router(shadow_mode.router, prefix=API_PREFIX, dependencies=auth_dep)
     fastapi_app.include_router(audit.router, prefix=API_PREFIX, dependencies=auth_dep)
 
     return fastapi_app

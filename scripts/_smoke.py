@@ -52,6 +52,8 @@ AUTH_GATED_ENDPOINTS = [
     ("/api/v1/audit", 401),
 ]
 
+# Shadow-mode evaluate is POST-only; covered by tests/api/test_shadow_mode.py.
+
 PENDING_ENDPOINTS: list[tuple[str, str]] = []
 
 

@@ -71,6 +71,8 @@ const PHASE_K = [
   { entity: 'ModelPerformanceReport',   schemaModule: 'app.schemas.reports',           schemaClass: 'ModelPerformanceReport',         model: null },
   { entity: 'ROIReport',                schemaModule: 'app.schemas.reports',           schemaClass: 'ROIReport',                      model: null },
   { entity: 'ComplianceReport',         schemaModule: 'app.schemas.reports',           schemaClass: 'ComplianceReport',               model: null },
+  { entity: 'ShadowEvaluationRequest',  schemaModule: 'app.schemas.shadow_mode',       schemaClass: 'ShadowEvaluationRequest',        model: null },
+  { entity: 'ShadowEvaluationResponse', schemaModule: 'app.schemas.shadow_mode',       schemaClass: 'ShadowEvaluationResponse',       model: null },
 ];
 
 const REPOSITORIES = [
