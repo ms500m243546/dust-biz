@@ -30,7 +30,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (username: string, password: string) => {
     const res = await api.login(username, password);
     setToken(res.access_token);
-    setUser(res.user);
+    // Login response carries token + role only; fetch the canonical user.
+    const me = await api.me();
+    setUser(me);
   }, []);
 
   const logout = useCallback(() => {

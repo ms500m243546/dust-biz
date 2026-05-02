@@ -1,45 +1,68 @@
+// Wire types - match backend Pydantic schemas exactly. When a backend
+// schema changes, this file is the single point of update on the web
+// side; everything downstream (client.ts, kpi.ts, views) is typed.
+
+export type Role =
+  | 'shift_supervisor'
+  | 'environmental_manager'
+  | 'operations_manager'
+  | 'dispatcher'
+  | 'executive'
+  | 'admin';
+
+export type RiskClass = 'low' | 'medium' | 'high';
+export type ProductionLossLabel = 'low' | 'medium' | 'high';
+export type ForecastHorizon = '15min' | '30min' | '60min' | '120min' | '24h';
+export type ForecastSource = 'model' | 'heuristic_fallback';
+export type TargetKind = 'sensor' | 'zone';
+export type ApprovalStatus = 'approved' | 'rejected' | 'overridden' | 'expired';
+export type SensorStatus = 'healthy' | 'degraded' | 'offline' | 'unknown';
+export type InterventionEffectiveness =
+  | 'successful'
+  | 'partial'
+  | 'unsuccessful'
+  | 'not_applicable';
+export type DustEventSource = 'model_alert' | 'manual_entry' | 'threshold_trigger';
+export type ZoneActivity =
+  | 'idle' | 'loading' | 'hauling' | 'dumping' | 'drilling'
+  | 'crushing' | 'watering' | 'grading' | 'maintenance' | 'mixed' | 'unknown';
+export type DustGenerationPotential = 'low' | 'medium' | 'high' | 'unknown';
+export type WindExposure = 'low' | 'medium' | 'high' | 'unknown';
+
 export interface UserSchema {
   user_id: string;
   username: string;
-  role: 'shift_supervisor' | 'env_manager' | 'ops_manager' | 'executive' | 'admin';
-  created_at: string;
+  role: Role;
 }
 
 export interface TokenResponse {
   access_token: string;
   token_type: 'bearer';
-  expires_in: number;
-  user: UserSchema;
-}
-
-export interface ForecastTargetSchema {
-  target_type: 'zone' | 'sensor';
-  target_id: string;
+  expires_at: string;
+  role: Role;
 }
 
 export interface DustForecastSchema {
-  prediction_id: string;
-  target: ForecastTargetSchema;
   issued_at: string;
-  horizon_minutes: number;
-  pm10_predicted: number | null;
-  pm25_predicted: number | null;
+  target_kind: TargetKind;
+  target_id: string;
+  forecast_horizon: ForecastHorizon;
+  predicted_pm10: number;
+  predicted_pm25: number;
   breach_probability: number;
-  risk_class: 'low' | 'medium' | 'high';
   confidence: number;
-  reason: string;
+  main_risk_window: string;
+  main_uncertainty: string;
   model_version: string;
   feature_pipeline_version: string;
   input_data_quality_score: number;
-  missing_inputs: string[];
   data_quality_warnings: string[];
-  source: string;
+  source: ForecastSource;
+  input_record_ids: string[];
 }
 
-export interface ProbableSourceSchema {
-  source_type: string;
-  source_id: string;
-  contribution_estimate: number;
+export interface ProbableSource {
+  source: string;
   confidence: number;
   reason: string;
 }
@@ -47,126 +70,126 @@ export interface ProbableSourceSchema {
 export interface SourceAttributionSchema {
   attribution_id: string;
   dust_event_id: string;
-  target_id: string;
-  probable_sources: ProbableSourceSchema[];
+  issued_at: string;
+  affected_station: string;
+  probable_sources: ProbableSource[];
+  evidence_fields: Record<string, unknown>;
   confidence: number;
   model_version: string;
-  reason: string;
-  evidence_fields: Record<string, unknown>;
-  created_at: string;
 }
 
 export interface RecommendationActionSchema {
+  rank: number;
   intervention_id: string;
-  description: string;
-  estimated_dust_reduction: number;
+  action: string;
+  breach_probability_after: number;
+  production_loss: ProductionLossLabel;
   estimated_tonnes_delayed: number;
-  estimated_time_to_effect_minutes: number;
   confidence: number;
   reason: string;
-  risk_class: 'low' | 'medium' | 'high';
   requires_human_approval: boolean;
+  risk_class: RiskClass;
+  simulation_id: string;
 }
 
 export interface RecommendationSchema {
   recommendation_id: string;
-  zone_id: string;
   issued_at: string;
-  primary_action: RecommendationActionSchema;
-  alternatives: RecommendationActionSchema[];
+  target_zone_id: string;
+  risk_event: string;
+  current_breach_probability: number;
+  target_probability: number;
+  recommended_actions: RecommendationActionSchema[];
+  requires_human_review: boolean;
+  compliance_priority_triggered: boolean;
   confidence: number;
   reason: string;
   model_version: string;
   feature_pipeline_version: string;
   input_data_quality_score: number;
+  data_quality_warnings: string[];
   linked_prediction_ids: string[];
   linked_attribution_id: string | null;
-  requires_human_review: boolean;
-  compliance_priority_triggered: boolean;
+  automation_level: string;
+  top_production_impact: string | null;
 }
 
 export interface RecommendationApprovalSchema {
   approval_id: string;
   recommendation_id: string;
-  approval_status: 'approved' | 'rejected' | 'overridden' | 'expired';
-  approved_by: string | null;
+  approved_by: string;
+  approver_role: string;
   decided_at: string;
+  approval_status: ApprovalStatus;
+  chosen_action_rank: number | null;
   override_action: string | null;
-  override_reason: string | null;
+  human_reason: string | null;
+  automation_level_at_decision: string;
   confidence: number;
   reason: string;
   model_version: string;
 }
 
 export interface MineStateZoneSchema {
+  timestamp: string;
   zone_id: string;
-  activity_summary: string;
+  activity: ZoneActivity;
   equipment_active: string[];
-  dust_generation_potential: number;
-  wind_exposure: 'low' | 'moderate' | 'high';
+  production_rate_tph: number | null;
+  dust_generation_potential: DustGenerationPotential;
+  wind_exposure: WindExposure;
   downwind_assets: string[];
+  operational_importance: string;
   staleness_flags: string[];
 }
 
 export interface MineStateSchema {
   mine_id: string;
   computed_at: string;
+  window_minutes: number;
   zones: MineStateZoneSchema[];
-  staleness_flags: string[];
 }
 
-export interface SensorHealthSchema {
+export interface SensorHealthStatusSchema {
   sensor_id: string;
-  data_quality_score: number;
-  status: 'ok' | 'degraded' | 'offline' | 'stale';
-  reasons: string[];
-  last_reading_at: string | null;
+  status: SensorStatus;
+  quality_score: number;
+  issues: string[];
+  downstream_confidence_multiplier: number;
 }
 
-export interface AuditLogEntry {
+export interface AuditLogSchema {
   audit_id: number;
+  occurred_at: string;
   actor: string;
   action: string;
   entity_type: string;
   entity_id: string;
   payload: Record<string, unknown>;
-  created_at: string;
 }
 
 export interface ActionOutcomeSchema {
-  outcome_id: string;
-  recommendation_id: string;
+  outcome_id: number;
+  recommendation_id: string | null;
   prediction_id: string | null;
-  observed_pm10: number | null;
-  observed_pm25: number | null;
-  intervention_effectiveness: number;
-  notes: string | null;
-  recorded_by: string;
+  actual_pm10_peak: number;
+  actual_pm25_peak: number | null;
+  breach_occurred: boolean;
+  production_loss_tonnes_actual: number | null;
+  intervention_effectiveness: InterventionEffectiveness;
+  model_error: string | null;
   recorded_at: string;
+  recorded_by: string;
 }
 
 export interface DustEventSchema {
   event_id: string;
-  zone_id: string | null;
-  sensor_id: string | null;
-  event_source: string;
   detected_at: string;
-  severity: string;
+  affected_station: string;
+  peak_pm10: number;
+  peak_pm25: number;
+  breach_occurred: boolean;
+  event_source: DustEventSource;
   linked_prediction_ids: string[];
-}
-
-export interface SensorSchema {
-  sensor_id: string;
-  mine_id: string;
-  zone_id: string | null;
-  sensor_type: string;
-  lat: number | null;
-  lon: number | null;
-}
-
-export interface ZoneSchema {
-  zone_id: string;
-  mine_id: string;
-  zone_type: string;
-  geometry: Record<string, unknown> | null;
+  notes: string | null;
 }

@@ -1,22 +1,16 @@
 import type { ReactNode } from 'react';
+import { StatusPill, type CardStatus } from './StatusPill';
 
 interface CardProps {
   title: string;
   subtitle?: string;
-  status?: 'green' | 'yellow' | 'red' | 'grey';
+  status?: CardStatus;
   children: ReactNode;
   actions?: ReactNode;
   warnings?: string[];
   stale?: boolean;
   staleAge?: string;
 }
-
-const STATUS_LABEL: Record<NonNullable<CardProps['status']>, string> = {
-  green: 'NOMINAL',
-  yellow: 'ELEVATED',
-  red: 'BREACH RISK',
-  grey: 'NO DATA',
-};
 
 export function Card({ title, subtitle, status, children, actions, warnings, stale, staleAge }: CardProps) {
   return (
@@ -27,7 +21,7 @@ export function Card({ title, subtitle, status, children, actions, warnings, sta
           {subtitle && <div className="card-sub">{subtitle}</div>}
         </div>
         <div className="card-head-right">
-          {status && <span className={`status-pill status-${status}`}>{STATUS_LABEL[status]}</span>}
+          {status && <StatusPill status={status} />}
           {stale && <span className="stale-badge">STALE{staleAge ? ` · ${staleAge}` : ''}</span>}
         </div>
       </header>

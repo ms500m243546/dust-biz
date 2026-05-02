@@ -11,6 +11,90 @@ phase.
 **Phase K - Feedback, Reporting, ROI.**
 Status: pending plan/approval. See `PLAN.md`.
 
+**Phase J deslop pass.**
+Status: complete (2026-05-01). Post-landing review identified that the
+initial Phase J commit's TypeScript wire types were written from
+speculation rather than read from `app/schemas/`, so every view used
+wrong field names (e.g. `forecast.target.target_id` vs real
+`forecast.target_id`; `recommendation.primary_action` vs real
+`recommended_actions[0]`; `TokenResponse.user` which doesn't exist;
+`Role` union missing `dispatcher` and using `env_manager` not
+`environmental_manager`). The dashboard rendered fine on empty data but
+would have crashed on first real payload.
+
+Deslop changes (validation gate stayed at 15/15 throughout):
+- **Backend addition:** `GET /api/v1/audit?since_minutes=&limit=&entity_type=&entity_id=`
+  reads the canonical `audit_logs` table (`AuditLogRepository.get_recent`).
+  Replaces the client-side synthesizer that fabricated audit IDs from
+  `/approvals` + `/action-outcomes`. Auth-gated via `current_user`.
+  New: `app/schemas/audit.py:AuditLogSchema`, `app/api/routes/audit.py`.
+  Closes **J1-R1**.
+- **Web types rewritten** (`web/src/api/types.ts`) field-by-field
+  against the actual Pydantic schemas. All `Role`, `RiskClass`,
+  `ProductionLossLabel`, `ForecastHorizon`, `ForecastSource`,
+  `TargetKind`, `ApprovalStatus`, `SensorStatus`, `InterventionEffectiveness`,
+  `DustEventSource`, `ZoneActivity`, `DustGenerationPotential`,
+  `WindExposure` exposed as union types so consumers are statically
+  checked.
+- **Auth flow fixed** (`AuthContext.tsx`): `TokenResponse` carries
+  `{access_token, token_type, expires_at, role}` with NO `user`
+  payload, so `login()` now sets the token then calls `/auth/me` to
+  populate the user. Mirrors the backend contract exactly.
+- **Approve / reject / override request bodies fixed**
+  (`ApproveRejectOverrideModal.tsx`, `client.ts`): approve sends
+  `{chosen_action_rank, human_reason?}`, reject sends `{human_reason}`,
+  override sends `{override_action, human_reason}`. The button gating
+  switched from `risk_class !== 'low'` (re-derived policy) to the
+  backend-supplied `requires_human_approval` flag (G1 source of
+  truth).
+- **All 4 views rewritten** to use real schema field names:
+  ControlRoom (target_kind/target_id, predicted_pm10/25, risk_event,
+  recommended_actions[0], rank, action, breach_probability_after,
+  production_loss); Compliance (real audit endpoint, sensor health
+  status/quality_score/issues); Operations + Executive (KPIs extracted
+  to pure module).
+- **`web/src/api/kpi.ts`** introduced as the single home for client-side
+  aggregations (`operationsKpis`, `executiveKpis`, `complianceKpis`).
+  Views now declarative — they call `useMemo(() => kpiFn(...), deps)`
+  and render. Honors ui-principles "no business logic in components"
+  to the extent possible until Phase K backend KPI endpoints land.
+- **`useApi` hook deslopped:**
+  - Dropped the dead `deps` parameter (every caller passed `[]`; the
+    `fnRef` pattern already captures latest fn).
+  - Split `loading` into `initialLoading` + `refreshing` so polling
+    no longer flickers "Loading…" on every tick.
+  - Short-circuits `setData` on byte-identical (`JSON.stringify`)
+    payloads to avoid downstream rerenders on no-op poll cycles.
+- **`Card` no longer duplicates** `STATUS_LABEL` — renders
+  `<StatusPill>` directly. `StatusPill` exports the canonical
+  `CardStatus` type and the `breachProbabilityToStatus` helper.
+- **`ApproveRejectOverrideModal`** now validates first, then a single
+  try/finally manages `busy` state.
+- **Web validators** share a `scripts/lib/web.js` helper. Each
+  validator is now ~5 lines (was ~30). `web-build.js` no longer
+  re-runs `tsc` (web-typecheck owns that).
+- **Dead code removed:** `web/src/hooks/usePolling.ts` (never imported),
+  `web/tsconfig.node.json` (unused once the build script dropped
+  the project-references step).
+- **Tests:** 9 → 14 web tests (`kpi.test.ts` exercises every aggregator
+  + edge cases; `components.test.tsx` adds `breachProbabilityToStatus`).
+
+Risks closed by the deslop:
+- **J1-R1 → CLOSED.** Real `/api/v1/audit` endpoint replaces client-side
+  synthesis. Compliance audit table now reads canonical rows.
+
+Phase J risks remaining (unchanged):
+- **J1-R2** map uses synthetic grid (D3-R3 GeoJSON in K).
+- **J1-R3** ROI placeholder (needs site_config.cost_curves + S14 join).
+- **J1-R4** PM thresholds hardcoded to WHO defaults.
+- **J1-R5** `web/node_modules` install time.
+
+Phase J recommendation-shape mismatch was a single-shot lesson:
+**TypeScript wire types must be read from the actual Pydantic schemas,
+not authored speculatively.** Phase K backend additions will follow the
+same discipline (e.g. add the wire type immediately when the schema
+lands, not when the view is built).
+
 **Phase J - Dashboard.**
 Status: complete (2026-05-01). Shipped in a single landing.
 - `web/` scaffold (Vite 5 + React 18 + TypeScript 5, strict): `package.json`,

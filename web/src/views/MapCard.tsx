@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Card } from '../components/Card';
-import type { MineStateSchema } from '../api/types';
+import type { MineStateSchema, WindExposure } from '../api/types';
 
 interface Props {
   mineState: MineStateSchema | null;
@@ -8,22 +8,23 @@ interface Props {
   windSpeed?: number | null;
 }
 
-const RISK_COLOR: Record<string, string> = {
+const EXPOSURE_COLOR: Record<WindExposure, string> = {
   high: '#d04444',
-  moderate: '#d7a02b',
+  medium: '#d7a02b',
   low: '#3d9a55',
+  unknown: '#a0a0a0',
 };
 
 export function MapCard({ mineState, windDirectionDeg, windSpeed }: Props) {
   const layout = useMemo(() => {
     if (!mineState) return [];
-    return mineState.zones.map((z, i) => {
-      const cols = Math.ceil(Math.sqrt(mineState.zones.length || 1));
-      const x = (i % cols) * 90 + 30;
-      const y = Math.floor(i / cols) * 90 + 30;
-      const exposure = z.wind_exposure;
-      return { zone: z, x, y, color: RISK_COLOR[exposure] ?? '#888' };
-    });
+    const cols = Math.max(1, Math.ceil(Math.sqrt(mineState.zones.length || 1)));
+    return mineState.zones.map((zone, i) => ({
+      zone,
+      x: (i % cols) * 90 + 30,
+      y: Math.floor(i / cols) * 90 + 30,
+      color: EXPOSURE_COLOR[zone.wind_exposure],
+    }));
   }, [mineState]);
 
   if (!mineState) {
@@ -34,12 +35,13 @@ export function MapCard({ mineState, windDirectionDeg, windSpeed }: Props) {
     );
   }
 
+  const anyZoneStale = mineState.zones.some((z) => z.staleness_flags.length > 0);
   const arrowAngle = (windDirectionDeg ?? 0) + 180; // wind FROM → arrow points TO
   return (
     <Card
       title="Mine map"
       subtitle={`${mineState.zones.length} zones · wind ${windSpeed ?? '?'} m/s @ ${windDirectionDeg ?? '?'}°`}
-      stale={mineState.staleness_flags.length > 0}
+      stale={anyZoneStale}
     >
       <svg width="100%" viewBox="0 0 600 400" className="mine-map">
         <rect x={0} y={0} width={600} height={400} fill="#f6f3ee" />

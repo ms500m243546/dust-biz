@@ -6,11 +6,11 @@ import type {
   RecommendationSchema,
   RecommendationApprovalSchema,
   MineStateSchema,
-  SensorHealthSchema,
-  AuditLogEntry,
+  SensorHealthStatusSchema,
+  AuditLogSchema,
   ActionOutcomeSchema,
   DustEventSchema,
-  ZoneSchema,
+  InterventionEffectiveness,
 } from './types';
 
 const TOKEN_KEY = 'dustops.token';
@@ -62,8 +62,8 @@ export const api = {
   me: () => request<UserSchema>('/auth/me'),
 
   // mine state
-  mineStateCurrent: (params?: { mine_id?: string }) => {
-    const q = params?.mine_id ? `?mine_id=${encodeURIComponent(params.mine_id)}` : '';
+  mineStateCurrent: (mine_id?: string) => {
+    const q = mine_id ? `?mine_id=${encodeURIComponent(mine_id)}` : '';
     return request<MineStateSchema>(`/mine-state/current${q}`);
   },
 
@@ -79,74 +79,56 @@ export const api = {
   recommendations: () => request<RecommendationSchema[]>('/recommendations'),
   recommendation: (id: string) => request<RecommendationSchema>(`/recommendations/${id}`),
   approval: (recId: string) => request<RecommendationApprovalSchema | null>(`/recommendations/${recId}/approval`),
-  approve: (recId: string) =>
-    request<RecommendationApprovalSchema>(`/recommendations/${recId}/approve`, { method: 'POST' }),
-  reject: (recId: string, reason: string) =>
+  approve: (recId: string, body: { chosen_action_rank: number; human_reason?: string }) =>
+    request<RecommendationApprovalSchema>(`/recommendations/${recId}/approve`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  reject: (recId: string, human_reason: string) =>
     request<RecommendationApprovalSchema>(`/recommendations/${recId}/reject`, {
       method: 'POST',
-      body: JSON.stringify({ reason }),
+      body: JSON.stringify({ human_reason }),
     }),
-  override: (recId: string, override_action: string, override_reason: string) =>
+  override: (recId: string, override_action: string, human_reason: string) =>
     request<RecommendationApprovalSchema>(`/recommendations/${recId}/override`, {
       method: 'POST',
-      body: JSON.stringify({ override_action, override_reason }),
+      body: JSON.stringify({ override_action, human_reason }),
     }),
   approvals: () => request<RecommendationApprovalSchema[]>('/approvals'),
   sweepExpired: () =>
-    request<{ swept: number }>('/approvals/sweep-expired', { method: 'POST' }),
+    request<RecommendationApprovalSchema[]>('/approvals/sweep-expired', { method: 'POST' }),
 
   // dust events
   dustEvents: () => request<DustEventSchema[]>('/dust-events'),
 
   // data quality
-  sensorHealth: () => request<SensorHealthSchema[]>('/data-quality'),
+  sensorHealth: () => request<SensorHealthStatusSchema[]>('/data-quality'),
 
   // outcomes
   outcomes: () => request<ActionOutcomeSchema[]>('/action-outcomes'),
   recordOutcome: (body: {
-    recommendation_id: string;
+    recommendation_id?: string | null;
     prediction_id?: string | null;
-    observed_pm10?: number | null;
-    observed_pm25?: number | null;
-    intervention_effectiveness: number;
-    notes?: string;
+    actual_pm10_peak: number;
+    actual_pm25_peak?: number | null;
+    breach_occurred: boolean;
+    production_loss_tonnes_actual?: number | null;
+    intervention_effectiveness: InterventionEffectiveness;
+    model_error?: string | null;
   }) =>
     request<ActionOutcomeSchema>('/action-outcomes', {
       method: 'POST',
       body: JSON.stringify(body),
     }),
 
-  // zones
-  zones: () => request<ZoneSchema[]>('/zones'),
-
-  // audit (read via meta endpoint isn't exposed yet; surface via approvals + outcomes histories)
-  // Phase J reads audit-relevant rows from /approvals + /action-outcomes + /dust-events.
-  auditFromApprovalsAndOutcomes: async (): Promise<AuditLogEntry[]> => {
-    const [approvals, outcomes] = await Promise.all([
-      request<RecommendationApprovalSchema[]>('/approvals'),
-      request<ActionOutcomeSchema[]>('/action-outcomes').catch(() => [] as ActionOutcomeSchema[]),
-    ]);
-    const a: AuditLogEntry[] = approvals.map((row, i) => ({
-      audit_id: i,
-      actor: row.approved_by ?? 'system',
-      action: row.approval_status,
-      entity_type: 'recommendation',
-      entity_id: row.recommendation_id,
-      payload: { override_action: row.override_action, override_reason: row.override_reason },
-      created_at: row.decided_at,
-    }));
-    const o: AuditLogEntry[] = outcomes.map((row, i) => ({
-      audit_id: 1_000_000 + i,
-      actor: row.recorded_by,
-      action: 'outcome_recorded',
-      entity_type: 'action_outcome',
-      entity_id: row.outcome_id,
-      payload: {
-        intervention_effectiveness: row.intervention_effectiveness,
-        observed_pm10: row.observed_pm10,
-      },
-      created_at: row.recorded_at,
-    }));
-    return [...a, ...o].sort((x, y) => y.created_at.localeCompare(x.created_at));
+  // audit (real, server-side)
+  audit: (params?: { since_minutes?: number; limit?: number; entity_type?: string; entity_id?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.since_minutes) q.set('since_minutes', String(params.since_minutes));
+    if (params?.limit) q.set('limit', String(params.limit));
+    if (params?.entity_type) q.set('entity_type', params.entity_type);
+    if (params?.entity_id) q.set('entity_id', params.entity_id);
+    const s = q.toString();
+    return request<AuditLogSchema[]>(`/audit${s ? `?${s}` : ''}`);
   },
 };

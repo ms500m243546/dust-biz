@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { ConfidenceBadge } from '../components/ConfidenceBadge';
-import { StatusPill, riskClassToStatus } from '../components/StatusPill';
+import { StatusPill, riskClassToStatus, breachProbabilityToStatus } from '../components/StatusPill';
 import { DataQualityWarning } from '../components/DataQualityWarning';
 import { Card } from '../components/Card';
 
@@ -17,6 +17,13 @@ describe('shared components', () => {
     expect(riskClassToStatus('medium')).toBe('yellow');
     expect(riskClassToStatus('low')).toBe('green');
     expect(riskClassToStatus(null)).toBe('grey');
+  });
+
+  it('breachProbabilityToStatus maps thresholds', () => {
+    expect(breachProbabilityToStatus(null)).toBe('grey');
+    expect(breachProbabilityToStatus(0.1)).toBe('green');
+    expect(breachProbabilityToStatus(0.6)).toBe('yellow');
+    expect(breachProbabilityToStatus(0.9)).toBe('red');
   });
 
   it('StatusPill renders label', () => {

@@ -11,6 +11,7 @@ from app.api import API_PREFIX, API_VERSION
 from app.api.routes import (
     approvals,
     attributions,
+    audit,
     auth,
     data_quality,
     dust_events,
@@ -87,6 +88,7 @@ def create_app() -> FastAPI:
     fastapi_app.include_router(recommendations.router, prefix=API_PREFIX)
     fastapi_app.include_router(approvals.router, prefix=API_PREFIX)
     fastapi_app.include_router(outcomes.router, prefix=API_PREFIX)
+    fastapi_app.include_router(audit.router, prefix=API_PREFIX)
 
     return fastapi_app
 

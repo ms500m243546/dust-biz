@@ -1,27 +1,26 @@
+import { useMemo } from 'react';
 import { Card } from '../components/Card';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { useApi } from '../hooks/useApi';
 import { api } from '../api/client';
+import { executiveKpis } from '../api/kpi';
 
 export function Executive() {
-  const approvals = useApi(() => api.approvals(), [], 60_000);
-  const events = useApi(() => api.dustEvents(), [], 60_000);
-  const outcomes = useApi(() => api.outcomes(), [], 60_000);
+  const approvals = useApi(() => api.approvals(), 60_000);
+  const events = useApi(() => api.dustEvents(), 60_000);
+  const outcomes = useApi(() => api.outcomes(), 60_000);
 
-  const approvedCount = (approvals.data ?? []).filter(a => a.approval_status === 'approved').length;
-  const overrideCount = (approvals.data ?? []).filter(a => a.approval_status === 'overridden').length;
-  const eventCount = events.data?.length ?? 0;
-  const incidentsAvoided = approvedCount + overrideCount;
-  const avgEff = outcomes.data?.length
-    ? outcomes.data.reduce((s, o) => s + o.intervention_effectiveness, 0) / outcomes.data.length
-    : 0;
+  const kpis = useMemo(
+    () => executiveKpis(approvals.data ?? [], events.data?.length ?? 0, outcomes.data ?? []),
+    [approvals.data, events.data, outcomes.data],
+  );
 
   return (
     <div className="view-grid">
       <ErrorBoundary label="Downtime avoided">
         <Card title="Downtime avoided (rolling)">
           <div className="big-metric">
-            <span className="value">{incidentsAvoided}</span>
+            <span className="value">{kpis.decisionsMade}</span>
             <span className="unit">decisions</span>
           </div>
           <p className="muted">Sum of approve + override decisions on dust risk recommendations.</p>
@@ -31,7 +30,7 @@ export function Executive() {
       <ErrorBoundary label="Compliance incidents">
         <Card title="Compliance incidents avoided">
           <div className="big-metric">
-            <span className="value">{Math.max(eventCount - approvedCount, 0)}</span>
+            <span className="value">{kpis.netEventExposure}</span>
             <span className="unit">net exposure</span>
           </div>
           <p className="muted">Dust events recorded minus interventions approved.</p>
@@ -41,7 +40,7 @@ export function Executive() {
       <ErrorBoundary label="Effectiveness trend">
         <Card title="Intervention effectiveness">
           <div className="big-metric">
-            <span className="value">{(avgEff * 100).toFixed(0)}%</span>
+            <span className="value">{(kpis.avgEffectiveness * 100).toFixed(0)}%</span>
             <span className="unit">avg</span>
           </div>
           <p className="muted">Average across all recorded outcomes (S14 feeder).</p>
