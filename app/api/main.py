@@ -25,6 +25,7 @@ from app.api.routes import (
     model_performance,
     outcomes,
     recommendations,
+    reports,
     sensor_readings,
     simulations,
     site_config,
@@ -92,6 +93,7 @@ def create_app() -> FastAPI:
     fastapi_app.include_router(outcomes.router, prefix=API_PREFIX)
     fastapi_app.include_router(training_data.router, prefix=API_PREFIX)
     fastapi_app.include_router(model_performance.router, prefix=API_PREFIX)
+    fastapi_app.include_router(reports.router, prefix=API_PREFIX)
     fastapi_app.include_router(audit.router, prefix=API_PREFIX)
 
     return fastapi_app

@@ -24,6 +24,18 @@ from app.schemas.mine import AutomationLevel
 DEFAULT_PM10_THRESHOLDS: dict[str, float] = {"warning": 100.0, "breach": 150.0}
 DEFAULT_PM25_THRESHOLDS: dict[str, float] = {"warning": 25.0, "breach": 35.0}
 
+# Phase K.2 — uncalibrated defaults; sites override per
+# docs/normalization_report.md G3-R1. `tonne_value_usd` is the
+# realised value of one tonne of saleable product;
+# `intervention_unit_costs_usd` maps intervention_id to a flat USD
+# cost per execution (water-truck pass, speed-reduction shift, etc.).
+# More sophisticated curves (per-tonne, per-hour) can extend the JSON
+# without breaking this default-shape contract.
+DEFAULT_COST_CURVES: dict[str, Any] = {
+    "tonne_value_usd": 80.0,
+    "intervention_unit_costs_usd": {},
+}
+
 
 class OptimizationWeightsSchema(BaseModel):
     """Weights consumed by the optimization engine (S11, Phase H).
@@ -55,6 +67,9 @@ class SiteConfigSchema(BaseModel):
         default_factory=OptimizationWeightsSchema
     )
     intervention_constraints: dict[str, Any] = Field(default_factory=dict)
+    cost_curves: dict[str, Any] = Field(
+        default_factory=lambda: dict(DEFAULT_COST_CURVES)
+    )
     updated_at: datetime | None = None
     updated_by: str | None = None
 
@@ -64,6 +79,11 @@ class SiteConfigSchema(BaseModel):
         # SQLAlchemy `default=dict` fires on flush, so an unflushed ORM row
         # exposes None; treat that as the empty-constraints case.
         return {} if v is None else v
+
+    @field_validator("cost_curves", mode="before")
+    @classmethod
+    def _coerce_none_cost_curves(cls, v: Any) -> Any:
+        return dict(DEFAULT_COST_CURVES) if v is None else v
 
     @field_validator("approval_expiry_minutes", mode="before")
     @classmethod

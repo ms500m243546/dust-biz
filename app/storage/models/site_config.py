@@ -30,6 +30,9 @@ class SiteConfiguration(Base):
     intervention_constraints: Mapped[dict[str, Any]] = mapped_column(
         JSON, default=dict, nullable=False
     )
+    cost_curves: Mapped[dict[str, Any]] = mapped_column(
+        JSON, default=dict, nullable=False
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now(), nullable=False
     )

@@ -68,6 +68,9 @@ const PHASE_I = [
 const PHASE_K = [
   { entity: 'TrainingRecord',           schemaModule: 'app.schemas.model_performance', schemaClass: 'TrainingRecordSchema',           model: null },
   { entity: 'ModelPerformanceMetric',   schemaModule: 'app.schemas.model_performance', schemaClass: 'ModelPerformanceMetricSchema',   model: 'ModelPerformanceMetric' },
+  { entity: 'ModelPerformanceReport',   schemaModule: 'app.schemas.reports',           schemaClass: 'ModelPerformanceReport',         model: null },
+  { entity: 'ROIReport',                schemaModule: 'app.schemas.reports',           schemaClass: 'ROIReport',                      model: null },
+  { entity: 'ComplianceReport',         schemaModule: 'app.schemas.reports',           schemaClass: 'ComplianceReport',               model: null },
 ];
 
 const REPOSITORIES = [
