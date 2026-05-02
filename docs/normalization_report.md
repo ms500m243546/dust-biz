@@ -8,8 +8,89 @@ phase.
 
 ## Active phase
 
-**Phase H - Recommendation Engine.**
+**Phase I - Human Approval Workflow.**
 Status: pending plan/approval. See `PLAN.md`.
+
+**Phase H - Recommendation Engine.**
+Status: complete (2026-05-01). All four sub-steps shipped.
+- H.1: `RecommendationSchema` + `RecommendationActionSchema` per
+  `data-contracts.md` line 190-205. Per-action fields carry G1
+  `requires_human_approval`, G3 `reason`, per-action `confidence`.
+  Wrapper carries G2 `confidence`, G3 `reason`,
+  G6 `requires_human_review`, G7 `compliance_priority_triggered`,
+  G15 `model_version` + `feature_pipeline_version` +
+  `input_data_quality_score` + `linked_prediction_ids` +
+  `linked_attribution_id`. ORM is append-only (G8) with
+  `REC-YYYYMMDD-NNNNN` IDs. `validate-safety` flipped from 4 -> 6
+  schemas tracked - the Recommendation* classes activate the
+  strictest pattern (`confidence` + `reason` + `model_version`)
+  and have all three. PHASE_H added to contract index. 289 tests.
+- H.2: `optimization_weighted_v0.1.0` in
+  `app/models/optimization/heuristic_baseline.py`. Score per
+  candidate = `w_breach * breach_drop -
+  w_production * (tonnes/1000) - w_disruption * (cycle_pct/100) -
+  w_low_confidence_penalty + w_compliance * breach_drop` (last
+  term active under extreme regime only). G7 three regimes
+  pinned in tests: `< 0.5` balanced, `0.5 - 0.85` w_production
+  x 0.7, `>= 0.85` w_production x 0.3 + w_compliance x 2.0
+  AND `compliance_priority_triggered = true`, overall confidence
+  capped at 0.85. G6 `requires_human_review = true` when no
+  candidate clears the low-confidence threshold. Pure function
+  per universal model rule 5. `RankedRecommendations` schema is
+  internal (not Recommendation-named, so safety scanner skips
+  it - persistence happens via `RecommendationSchema` in H.3).
+  298 tests.
+- H.3: `app/domain/recommendations.py:generate_recommendation`.
+  Resolves Zone -> Mine -> SiteConfig (via `require_resolved` -
+  D-R2 fail-loud), pulls latest forecast (zone-targeted first;
+  sensor-in-zone fallback), filters S8 catalog by
+  `Zone.zone_type` against each entry's `allowed_zone_types`,
+  runs `simulate_intervention(...)` for every eligible entry plus
+  `simulate_do_nothing(...)` for the counterfactual baseline,
+  registers + invokes the optimization engine, applies G6
+  high-risk gating (medium/high `risk_class` actions dropped
+  from surfaced ranking when `requires_human_review`), best-
+  effort matches the latest `SourceAttribution` for the same
+  `target_id` to populate `linked_attribution_id`, renders the
+  S12 six-line template into `recommendation.reason`, persists.
+  Touches a safety-reviewer trigger path
+  (`app/domain/recommendations/`); the subagent should run before
+  any future change here per `safety-guardrails.md`. 316 tests.
+- H.4: API + smoke promotion + phase advance.
+  `GET /api/v1/recommendations/current` (compute-on-read, smoke
+  happy path under empty world returns null, single-zone
+  defaults to that zone), `POST /api/v1/recommendations` (issue
+  for an explicit zone), `GET /api/v1/recommendations/{id}`,
+  `GET /api/v1/recommendations` (recent history). Smoke promoted
+  to 17 endpoints (was 15: `/recommendations/current` graduates
+  from PENDING + `/recommendations` history added). PENDING list
+  now empty. `.progress_state.json` advanced to
+  `current_phase=I`. 317 tests.
+
+Open risks introduced in Phase H:
+- H1-R1 (low): recommendation endpoints unauthenticated; same
+  posture as forecast/attribution/simulation endpoints, deferred
+  to Phase I.
+- H2-R1 (medium-latent): optimizer weights uncalibrated; the
+  default `OptimizationWeightsSchema` is a placeholder. Revisit
+  in Phase K alongside D3-R1 / E2-R1 / F3-R2 / G2-R1 / G3-R1.
+- H3-R1 (low): orchestrator simulates every applicable catalog
+  entry per request - O(catalog x forecast). Fine at MVP scale;
+  J perf pass will cache per-(zone, forecast) tuple.
+- H3-R2 (low): single forecast per recommendation; horizon
+  ensemble deferred to J/K.
+- H3-R3 (low): attribution link is a best-effort match by
+  `target_id` against recent attributions; a sensor-targeted
+  forecast on a zone with multiple attributions could pick a
+  stale attribution. Tighten when the dashboard surfaces
+  attribution staleness in J.
+
+Closed during Phase H:
+- **G3-R2** (default effective duration is rule-of-thumb): the
+  recommendation orchestrator does not pass an explicit duration;
+  the rule-of-thumb default is preserved AS the documented
+  behavior at MVP. (Marked closed to acknowledge it's now an
+  intentional design choice, not a deferred risk.)
 
 **Phase G - Intervention Simulation.**
 Status: complete (2026-05-01). All four sub-steps shipped.

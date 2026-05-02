@@ -1,28 +1,28 @@
 # DustOps AI — Session Handoff
 
 **As of:** 2026-05-01
-**Active phase:** H — Recommendation Engine (pending plan/approval)
-**Last completed:** G — Intervention Simulation (G.1 → G.4)
-**Validation gate:** `npm run agent-check` GREEN, 11/11, 278 tests, 15 smoke endpoints
+**Active phase:** I — Human Approval Workflow (pending plan/approval)
+**Last completed:** H — Recommendation Engine (H.1 → H.4)
+**Validation gate:** `npm run agent-check` GREEN, 11/11, 317 tests, 17 smoke endpoints (no pending)
 
 ---
 
 ## State at handoff
 
-- `.progress_state.json`: `current_phase=H`, `completed_phases=[A,B,C,D,E,F,G]`.
-- Working tree: clean after Phase G commits (G.1–G.4 each on `main`).
-- Rollback log: all D.*, E.*, F.*, G.* pre/post snapshots present.
+- `.progress_state.json`: `current_phase=I`, `completed_phases=[A,B,C,D,E,F,G,H]`.
+- Working tree: clean after Phase H commits (H.1–H.4 each on `main`).
+- Rollback log: all D.*, E.*, F.*, G.*, H.* pre/post snapshots present.
 - Memory at `C:\Users\ignac\.claude\projects\C--Users-ignac-OneDrive-Desktop-WFLW\memory\`
-  needs an update — supersede the Phase F entry with Phase G.
+  needs an update — supersede the Phase G entry with Phase H.
 
-## What shipped in Phase G
+## What shipped in Phase H
 
-| Step | Subsystem | Snapshots (pre / post) | Key files |
+| Step | Subsystem | Snapshots | Key files |
 |---|---|---|---|
-| G.1 | Intervention library (S8) | `phase-g1-pre-interventions` / `phase-g1-interventions` | `app/schemas/interventions.py`, `app/storage/{models,repositories}/interventions.py`, `app/domain/interventions.py` (default catalog + `seed_default_interventions` + `require_known`), `app/api/routes/interventions.py` |
-| G.2 | InterventionImpactModel heuristic (S9) | `phase-g2-pre-impact-model` / `phase-g2-impact-model` | `app/schemas/simulations.py` (Impact + Cost + joined Simulation schemas), `app/models/intervention/heuristic_baseline.py` (`intervention_impact_heuristic_v0.1.0`) |
-| G.3 | ProductionCostModel heuristic (S10) | `phase-g3-pre-cost-model` / `phase-g3-cost-model` | `app/models/cost/heuristic_baseline.py` (`production_cost_heuristic_v0.1.0`) |
-| G.4 | Orchestrator + ORM + API + smoke + phase advance | `phase-g4-pre-api` / `phase-g4-api-routed` | `app/storage/models/simulations.py`, `app/storage/repositories/simulations.py`, `app/domain/simulation.py`, `app/api/routes/simulations.py` |
+| H.1 | Recommendation schema/ORM/repo + safety scanner activation | `phase-h1-pre-recommendations` / `phase-h1-recommendations` | `app/schemas/recommendations.py`, `app/storage/{models,repositories}/recommendations.py` |
+| H.2 | OptimizationEngine heuristic (S11) | `phase-h2-pre-optimizer` / `phase-h2-optimizer` | `app/schemas/optimization.py`, `app/models/optimization/heuristic_baseline.py` (`optimization_weighted_v0.1.0`) |
+| H.3 | Recommendation orchestrator (S12) + S12 template | `phase-h3-pre-orchestrator` / `phase-h3-orchestrator` | `app/domain/recommendations.py` |
+| H.4 | API + smoke promotion + phase advance | `phase-h4-pre-api` / `phase-h4-api-routed` | `app/api/routes/recommendations.py`, smoke + main.py |
 
 ## Architecture as it stands
 
@@ -32,91 +32,76 @@
    API   →  app/api/routes/  health · meta · sensor_readings · weather_readings ·
             equipment_activity · data_quality · site_config · zones ·
             haul_road_segments · mine_state · forecasts · dust_events ·
-            attributions · interventions · simulations
+            attributions · interventions · simulations · recommendations
             │
    Domain →  app/domain/  data_quality · site_config_resolver · mine_state ·
             features · forecasting · dust_events · attribution ·
-            interventions · simulation
+            interventions · simulation · recommendations
             │
    Models →  app/models/  registry · forecasting/heuristic_baseline ·
             attribution/rules_baseline · intervention/heuristic_baseline ·
-            cost/heuristic_baseline
+            cost/heuristic_baseline · optimization/heuristic_baseline
             │
    Storage →  app/storage/models/  Mine · Zone · HaulRoadSegment · Sensor · Equipment ·
             SensorReading · WeatherReading · EquipmentActivity · IngestError ·
             SiteConfiguration · MineStateSnapshot · FeatureRecord · DustPrediction ·
-            DustEvent · SourceAttribution · InterventionOption · InterventionSimulation
-            app/storage/repositories/  14 repos
+            DustEvent · SourceAttribution · InterventionOption ·
+            InterventionSimulation · Recommendation
+            app/storage/repositories/  15 repos
 ```
 
-`validate-boundaries` confirms zero upward imports across 66 Python files in 5 layered directories.
-`validate-safety` is **active**: 4 safety-relevant schemas tracked
-(`DustForecastSchema`, `ForecastTargetSchema`, `SourceAttributionSchema`,
-`InterventionSimulationSchema`), all required guardrail fields present.
+`validate-boundaries` confirms zero upward imports across 73 Python files in 5 layered directories.
+`validate-safety` is **active**: 7 schemas tracked (was 4: + RecommendationSchema, RecommendationActionSchema, InterventionSimulationSchema). Recommendation* classes pass the strictest pattern (`confidence` + `reason` + `model_version`).
 
-## Open risks carried into Phase H
+## Open risks carried into Phase I
 
-| ID | Severity | Summary | Resolution phase |
+| ID | Severity | Summary | Resolution |
 |---|---|---|---|
-| D2-R1 / E4-R2 / F4-R1 / G4-R1 | low | Admin / forecast / attribution / simulation endpoints unauthenticated | I |
-| D3-R1 / E2-R1 / F3-R2 / G2-R1 / G3-R1 | medium-latent | Heuristic / rule / impact / cost coefficients uncalibrated | K |
+| D2-R1 / E4-R2 / F4-R1 / G4-R1 / H1-R1 | low | All admin / forecast / attribution / simulation / recommendation endpoints unauthenticated | **I** (resolves the cluster) |
+| D3-R1 / E2-R1 / F3-R2 / G2-R1 / G3-R1 / H2-R1 | medium-latent | Heuristic / rule / impact / cost / optimizer coefficients uncalibrated | K |
 | D3-R2 | low | Snapshot writes per request stress SQLite | R8 — Postgres swap |
-| D3-R3 / F3-R1 | low | Downwind / per-source bearing straight-line, not terrain-aware | when GeoJSON / elevation lands |
-| E1-R1 | low | Leakage guard single-point at builder | K (offline sweep harness) |
+| D3-R3 / F3-R1 | low | Bearing not terrain-aware | when GeoJSON / elevation lands |
+| E1-R1 | low | Leakage guard single-point at builder | K |
 | E2-R2 | low | Registry process-global | re-visit on multi-tenant |
 | E3-R1 | low | `input_data_quality_score` rounded on persist | K |
 | E4-R1 | low | Forecast compute-on-read cost grows with zones | J (perf pass) |
-| F1-R1 | low | Threshold-trigger sweep is manual-call only | K (background scheduler) |
-| F2-R1 | low | `evidence_fields` JSON shape unenforced | tighten if a consumer depends on it |
-| G3-R2 | low | Default effective duration = 2x time-to-effect (rule of thumb) | when intervention plan API lands |
-| G4-R2 | low | Zone-target forecast lookup uses most-recent without staleness check | J (forecast staleness surfaced in dashboard) |
+| F1-R1 | low | Threshold-trigger sweep manual-call only | K (background scheduler) |
+| F2-R1 | low | `evidence_fields` JSON shape unenforced | tighten if a consumer depends |
+| G4-R2 | low | Zone-target forecast lookup most-recent (no staleness check) | J |
+| H3-R1 | low | Orchestrator simulates every applicable catalog entry per request | J (cache per (zone, forecast)) |
+| H3-R2 | low | Single forecast per recommendation | J/K |
+| H3-R3 | low | Attribution link is best-effort match by target_id | J |
 
-**Closed during Phase G:**
-- **D2-R2** — zone `allowed_interventions` / `requires_approval_for` IDs
-  validated against the catalog at zone upsert.
-- **D-R3** partial — `intervention_constraints` JSON shape itself remains
-  free-form, but its keys (intervention IDs) are now validated whenever a
-  consumer looks them up via `require_known`. Full schema enforcement
-  deferred to H/J.
+**Closed during Phase H:**
+- **G3-R2** (default effective duration is rule of thumb) — recommendation orchestrator preserves the rule-of-thumb intentionally; reclassified from "deferred" to "intentional MVP design".
 
-## What Phase H will do (per `PLAN.md`)
+## What Phase I will do (per `PLAN.md`)
 
-> Choose the lowest-cost effective intervention. Rank alternatives.
-> Prioritize compliance when risk is extreme.
+> Every recommendation passes through a human approval step; every decision is auditable.
 
 Deliverables:
-- Production-aware optimization engine (S11) implementing
-  `OptimizationEngine` per `model-contracts.md`.
-- Recommendation engine (S12) producing the recommendation template.
-- Compliance-priority logic (Guardrail 7): when breach probability >=
-  configurable extreme threshold (default 0.85), shift weights toward
-  compliance and surface the shift in the recommendation reason.
-- Per-site risk-tolerance configuration via existing `SiteConfig`
-  optimization weights.
-- Endpoints likely: `GET /api/v1/recommendations/current`
-  (already pending in smoke), `GET /api/v1/recommendations/{id}`,
-  `GET /api/v1/recommendations` history.
+- `recommendation_approvals` ORM/schema/repo per `data-contracts.md` line 207-217.
+- Approval / rejection / override endpoints (S13).
+- Outcome capture endpoint feeding S14 (Phase K).
+- Audit log of every decision (G8/G9).
+- Default automation level remains **L1 — Advisory**; L3-eligible auto-execution remains gated on `risk_class = low` per Guardrail 13.
+- Auth (closes the unauthenticated-endpoints cluster: D2-R1, E4-R2, F4-R1, G4-R1, H1-R1).
 
-`validate-safety` will activate G2/G3/G15 enforcement on
-`RecommendationSchema` (currently no Recommendation-named schema
-exists; landing one in H is what flips the scanner from 4 → 5
-tracked schemas).
+`validate-safety` will pick up `Approval`-shaped schemas if they end up Recommendation-prefixed; otherwise it remains at 7 tracked schemas through I.
 
 ## How to resume next session
 
-1. Read `docs/normalization_report.md` "Active phase" — Phase H.
-2. `git status` — clean (G.1–G.4 committed).
-3. `python progress.py` — `current_phase=H`.
+1. Read `docs/normalization_report.md` "Active phase" — Phase I.
+2. `git status` — clean (H.1–H.4 committed).
+3. `python progress.py` — `current_phase=I`.
 4. `npm run agent-check` — gate green.
-5. Produce the architect-protocol plan for Phase H and stop for approval.
+5. Produce the architect-protocol plan for Phase I and stop for approval.
 
 ## Key references
 
 - Master plan: `PLAN.md`
 - Operating contract: `docs/architect_protocol.md`
-- Subsystem contracts: `docs/subsystem-contracts.md` (S11, S12 next)
-- Data contracts: `docs/data-contracts.md` (`recommendations` table next)
-- Model contracts: `docs/model-contracts.md` (`OptimizationEngine` interface)
-- Safety guardrails: `docs/safety-guardrails.md` (Guardrails 1, 3, 6, 7, 15
-  all pin Phase H behavior)
+- Subsystem contracts: `docs/subsystem-contracts.md` (S13 next)
+- Data contracts: `docs/data-contracts.md` (`recommendation_approvals` next)
+- Safety guardrails: `docs/safety-guardrails.md` (G1, G8, G9, G13, G14 all pin Phase I behavior)
 - Phase change log: `docs/normalization_report.md`

@@ -19,6 +19,7 @@ from app.api.routes import (
     interventions,
     meta,
     mine_state,
+    recommendations,
     sensor_readings,
     simulations,
     site_config,
@@ -79,6 +80,7 @@ def create_app() -> FastAPI:
     fastapi_app.include_router(attributions.router, prefix=API_PREFIX)
     fastapi_app.include_router(interventions.router, prefix=API_PREFIX)
     fastapi_app.include_router(simulations.router, prefix=API_PREFIX)
+    fastapi_app.include_router(recommendations.router, prefix=API_PREFIX)
 
     return fastapi_app
 

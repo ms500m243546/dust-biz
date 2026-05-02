@@ -34,11 +34,11 @@ REQUIRED_ENDPOINTS = [
     ("/api/v1/attributions", 200),
     ("/api/v1/interventions", 200),
     ("/api/v1/simulations", 200),
+    ("/api/v1/recommendations", 200),
+    ("/api/v1/recommendations/current", 200),
 ]
 
-PENDING_ENDPOINTS = [
-    ("/api/v1/recommendations/current", "Phase H"),
-]
+PENDING_ENDPOINTS: list[tuple[str, str]] = []
 
 
 def main() -> int:
@@ -55,7 +55,8 @@ def main() -> int:
         return 1
 
     print(f"smoke: {len(REQUIRED_ENDPOINTS)} endpoints OK in-process via TestClient")
-    print(f"       pending: {', '.join(p for p, _ in PENDING_ENDPOINTS)}")
+    if PENDING_ENDPOINTS:
+        print(f"       pending: {', '.join(p for p, _ in PENDING_ENDPOINTS)}")
     return 0
 
 
