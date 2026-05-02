@@ -39,6 +39,7 @@ const PYTHON_TOOLING = [
 const CONTRACT_VALIDATORS = [
   { name: 'validate-contracts',     script: 'checks/validate-contracts.js' },
   { name: 'validate-data-sources',  script: 'checks/validate-data-sources.js' },
+  { name: 'validate-rca-seed',      script: 'checks/validate-rca-seed.js' },
 ];
 
 // Boundary, safety, and diff inspectors (active from Phase B.5 onward)

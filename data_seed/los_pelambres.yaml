@@ -1,0 +1,182 @@
+# Los Pelambres — RCA-derived seed data
+#
+# Mine: Minera Los Pelambres (operator: Antofagasta Minerals).
+# Region / commune: Coquimbo / Salamanca.
+# Original RCA: Resolución 38/1997, Comisión Regional del Medio
+# Ambiente IV Región. See docs/rca-seed.md for the full provenance
+# (El Mauro tailings consent, Caimanes case, supreme court rulings).
+#
+# Values marked `TODO_FROM_RCA` must be sourced from the actual RCA
+# PDFs on sea.gob.cl before this seed is loaded into a deployment
+# environment. The validate-rca-seed gate fails on TODO_FROM_RCA when
+# DUSTOPS_DEPLOYMENT_TIER=production.
+
+deployment_tier: dev  # one of {dev, staging, production}
+
+mine:
+  mine_id: los-pelambres
+  name: Minera Los Pelambres
+  default_automation_level: L1
+
+# Approximate pit centroid in WGS84 lon/lat. Replace with surveyed
+# values when partner data lands.
+mine_centroid:
+  longitude: -70.5208
+  latitude: -31.7300
+
+site_config:
+  site_id: los-pelambres-site
+  mine_id: los-pelambres
+  automation_level: L1
+  # Chilean primary norms (D.S. 12/2011, MMA): PM10 24h 150 µg/m³,
+  # annual 50; PM2.5 24h 50 µg/m³, annual 20. Site default mirrors the
+  # daily breach norm; per-station overrides below tighten where the
+  # RCA mandates.
+  pm10_thresholds:
+    warning: 100.0
+    breach: 150.0
+  pm25_thresholds:
+    warning: 25.0
+    breach: 50.0
+  extreme_breach_threshold: 0.85
+  low_confidence_threshold: 0.5
+  approval_expiry_minutes: 15
+  optimization_weights:
+    w_breach: 1.0
+    w_production: 1.0
+    w_disruption: 0.5
+    w_low_confidence: 0.5
+    w_compliance: 1.0
+  cost_curves:
+    tonne_value_usd: 80.0
+    intervention_unit_costs_usd: {}
+
+# Populated places + sensitive receptors mentioned in the Los Pelambres
+# RCAs and the Caimanes / El Mauro case file. Distance + bearing are
+# computed by the loader from the mine centroid.
+populated_places:
+  - place_id: lp-cuncumen
+    name: Cuncumén
+    kind: town
+    longitude: -70.7010
+    latitude: -31.9710
+    population: 600
+    source: rca_receptor_list
+    source_url: https://sea.gob.cl/  # TODO_FROM_RCA: specific RCA URL
+    notes: Community monitoring receptor, Salamanca commune.
+  - place_id: lp-caimanes
+    name: Caimanes
+    kind: town
+    longitude: -71.1350
+    latitude: -32.0200
+    population: 1300
+    source: rca_receptor_list
+    source_url: https://sea.gob.cl/  # TODO_FROM_RCA
+    notes: Downstream of El Mauro tailings dam; subject of the
+      Caimanes drinking-water supreme court case.
+  - place_id: lp-salamanca
+    name: Salamanca
+    kind: town
+    longitude: -70.9670
+    latitude: -31.7780
+    population: 25000
+    source: rca_receptor_list
+    source_url: https://sea.gob.cl/  # TODO_FROM_RCA
+    notes: Comuna seat; regional reference station.
+  - place_id: lp-el-manzano
+    name: El Manzano
+    kind: town
+    longitude: TODO_FROM_RCA  # need surveyed coordinates
+    latitude: TODO_FROM_RCA
+    population: TODO_FROM_RCA
+    source: rca_receptor_list
+    source_url: https://sea.gob.cl/  # TODO_FROM_RCA
+    notes: Small community downstream of mine area.
+  - place_id: lp-chillepin
+    name: Chillepín
+    kind: town
+    longitude: TODO_FROM_RCA
+    latitude: TODO_FROM_RCA
+    population: TODO_FROM_RCA
+    source: rca_receptor_list
+    source_url: https://sea.gob.cl/  # TODO_FROM_RCA
+    notes: Choapa valley community.
+  - place_id: lp-coiron
+    name: Coirón
+    kind: town
+    longitude: TODO_FROM_RCA
+    latitude: TODO_FROM_RCA
+    population: TODO_FROM_RCA
+    source: rca_receptor_list
+    source_url: https://sea.gob.cl/  # TODO_FROM_RCA
+
+# Sensors (compliance + faena monitoring stations). Each station also
+# gets a row in `station_threshold_overrides` below so the K.2 +
+# K.6 reports honor the RCA-mandated limit. SINCA station codes are
+# the values the SINCA gateway expects (see
+# scripts/seed_public_data.py).
+sensors:
+  - sensor_id: lp-em05-cuncumen
+    mine_id: los-pelambres
+    sensor_type: pm10
+    is_compliance_station: true
+    sinca_station_code: TODO_FROM_RCA  # verify against sinca.mma.gob.cl
+    notes: Cuncumén community monitoring station (regulator-grade).
+  - sensor_id: lp-caimanes
+    mine_id: los-pelambres
+    sensor_type: pm10
+    is_compliance_station: true
+    sinca_station_code: TODO_FROM_RCA
+    notes: Caimanes community PM monitoring per RCA receptor list.
+  - sensor_id: lp-salamanca
+    mine_id: los-pelambres
+    sensor_type: pm10
+    is_compliance_station: true
+    sinca_station_code: TODO_FROM_RCA
+    notes: Salamanca regional reference.
+  - sensor_id: lp-el-mauro-faena
+    mine_id: los-pelambres
+    sensor_type: pm10
+    is_compliance_station: false
+    notes: Faena monitoring near El Mauro tailings dam.
+  - sensor_id: lp-pit-active
+    mine_id: los-pelambres
+    sensor_type: pm10
+    is_compliance_station: false
+    notes: Active-pit faena station.
+  - sensor_id: lp-piuquenes
+    mine_id: los-pelambres
+    sensor_type: pm10
+    is_compliance_station: false
+    sinca_station_code: TODO_FROM_RCA
+    notes: Piuquenes faena reference.
+
+# Per-station threshold overrides. Los Pelambres RCAs reference the
+# D.S. 12/2011 primary norms at receptor stations rather than imposing
+# stricter site-specific values, so the receptors below mirror the
+# site default — the value of the encoding is provenance + per-station
+# audit trail, not numeric stringency. If a future RCA amendment
+# tightens any of these, change the per-station number here without
+# touching the site default.
+station_threshold_overrides:
+  - sensor_id: lp-em05-cuncumen
+    pm10_warning_ugm3: 100.0
+    pm10_breach_ugm3: 150.0
+    pm25_warning_ugm3: 25.0
+    pm25_breach_ugm3: 50.0
+    rca_reference: RCA 38/1997 — Cuncumén community receptor
+    source_url: https://sea.gob.cl/  # TODO_FROM_RCA
+  - sensor_id: lp-caimanes
+    pm10_warning_ugm3: 100.0
+    pm10_breach_ugm3: 150.0
+    pm25_warning_ugm3: 25.0
+    pm25_breach_ugm3: 50.0
+    rca_reference: RCA 050/2004 amendment — El Mauro / Caimanes consent
+    source_url: https://sea.gob.cl/  # TODO_FROM_RCA
+  - sensor_id: lp-salamanca
+    pm10_warning_ugm3: 100.0
+    pm10_breach_ugm3: 150.0
+    pm25_warning_ugm3: 25.0
+    pm25_breach_ugm3: 50.0
+    rca_reference: RCA 38/1997 — Salamanca comuna receptor
+    source_url: https://sea.gob.cl/  # TODO_FROM_RCA

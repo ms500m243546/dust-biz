@@ -49,6 +49,7 @@ class Zone(Base):
     allowed_interventions: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
     requires_approval_for: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
     geometry: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    surface_roughness_m: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     mine: Mapped[Mine] = relationship(back_populates="zones")
 

@@ -36,6 +36,7 @@ class SiteConfigRepository(BaseRepository):
         intervention_constraints: dict[str, Any] | None = None,
         updated_by: str | None = None,
         approval_expiry_minutes: int = 15,
+        cost_curves: dict[str, Any] | None = None,
     ) -> SiteConfiguration:
         existing = self.session.get(SiteConfiguration, site_id)
         if existing is None:
@@ -51,6 +52,7 @@ class SiteConfigRepository(BaseRepository):
                 intervention_constraints=intervention_constraints or {},
                 updated_by=updated_by,
                 approval_expiry_minutes=approval_expiry_minutes,
+                cost_curves=cost_curves or {},
             )
             self.session.add(cfg)
         else:
@@ -64,6 +66,8 @@ class SiteConfigRepository(BaseRepository):
             existing.intervention_constraints = intervention_constraints or {}
             existing.updated_by = updated_by
             existing.approval_expiry_minutes = approval_expiry_minutes
+            if cost_curves is not None:
+                existing.cost_curves = cost_curves
             cfg = existing
         self.session.flush()
         return cfg

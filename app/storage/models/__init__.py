@@ -21,6 +21,7 @@ from app.storage.models.outcomes import ActionOutcome
 from app.storage.models.readings import EquipmentActivity, SensorReading, WeatherReading
 from app.storage.models.receptor import PopulatedPlace
 from app.storage.models.recommendations import Recommendation
+from app.storage.models.road_silt import HaulRoadSegmentSilt
 from app.storage.models.simulations import InterventionSimulation
 from app.storage.models.site_config import SiteConfiguration
 from app.storage.models.station_thresholds import StationThresholdOverride
@@ -36,6 +37,7 @@ __all__ = [
     "EquipmentActivity",
     "FeatureRecord",
     "HaulRoadSegment",
+    "HaulRoadSegmentSilt",
     "IngestError",
     "InterventionOption",
     "InterventionSimulation",

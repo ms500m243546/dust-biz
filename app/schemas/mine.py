@@ -100,6 +100,10 @@ class ZoneSchema(BaseModel):
     allowed_interventions: tuple[str, ...] = Field(default_factory=tuple)
     requires_approval_for: tuple[str, ...] = Field(default_factory=tuple)
     geometry: dict[str, Any] | None = None
+    # Phase L.7: surface roughness length (z0) for the wind profile.
+    # Defaults from WMO Guide to Met Instruments §5.9: open mine pit
+    # ~0.03 m, haul roads ~0.05 m, vegetation ~0.5+ m. Sites override.
+    surface_roughness_m: float | None = Field(default=None, ge=0.0)
 
     @field_validator("geometry", mode="before")
     @classmethod

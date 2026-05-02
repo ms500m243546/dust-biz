@@ -1,0 +1,165 @@
+# Los Bronces — RCA-derived seed data
+#
+# Mine: Anglo American Sur S.A. (50.1% Anglo American, 29.5%
+# Mitsubishi, 20.4% Codelco / Mitsui consortium).
+# Region / commune: Región Metropolitana / Lo Barnechea (~3,500 m).
+# Original RCA: 391/2007 (Proyecto Desarrollo Los Bronces).
+# Major case: "Los Bronces Integrado" — submitted 2019, rejected by
+# the SEA Comité de Ministros in 2020; modified version under SEA
+# review thereafter. See docs/rca-seed.md.
+#
+# Threshold posture is materially different from Los Pelambres because
+# Los Bronces sits inside / above the Santiago basin and is governed
+# by the Plan de Prevención y Descontaminación Atmosférica (PPDA) of
+# the Región Metropolitana — typically stricter than the national
+# D.S. 12/2011 norm at community receptors.
+
+deployment_tier: dev
+
+mine:
+  mine_id: los-bronces
+  name: Los Bronces (Anglo American Sur)
+  default_automation_level: L1
+
+mine_centroid:
+  longitude: -70.2900
+  latitude: -33.1500
+
+site_config:
+  site_id: los-bronces-site
+  mine_id: los-bronces
+  automation_level: L1
+  # Defaults still mirror D.S. 12/2011; the PPDA-driven stricter
+  # Santiago receptor limits live in `station_threshold_overrides`.
+  pm10_thresholds:
+    warning: 100.0
+    breach: 150.0
+  pm25_thresholds:
+    warning: 25.0
+    breach: 50.0
+  extreme_breach_threshold: 0.85
+  low_confidence_threshold: 0.5
+  approval_expiry_minutes: 15
+  optimization_weights:
+    w_breach: 1.0
+    w_production: 1.0
+    w_disruption: 0.5
+    w_low_confidence: 0.5
+    w_compliance: 1.2  # weighted higher per Santiago PPDA exposure
+  cost_curves:
+    tonne_value_usd: 80.0
+    intervention_unit_costs_usd: {}
+
+populated_places:
+  - place_id: lb-las-condes
+    name: Las Condes
+    kind: town
+    longitude: -70.5500
+    latitude: -33.4000
+    population: 330000
+    source: rca_receptor_list
+    source_url: https://sea.gob.cl/  # TODO_FROM_RCA (391/2007)
+    notes: Eastern Santiago commune; SINCA Las Condes is a primary
+      receptor for the Los Bronces community-impact assessment.
+  - place_id: lb-lo-barnechea
+    name: Lo Barnechea
+    kind: town
+    longitude: -70.5100
+    latitude: -33.3500
+    population: 124000
+    source: rca_receptor_list
+    source_url: https://sea.gob.cl/  # TODO_FROM_RCA
+    notes: Closest residential commune to the mine; central to the
+      2020 SEA rejection of "Los Bronces Integrado".
+  - place_id: lb-vitacura
+    name: Vitacura
+    kind: town
+    longitude: -70.5800
+    latitude: -33.3900
+    population: 90000
+    source: rca_receptor_list
+    source_url: https://sea.gob.cl/  # TODO_FROM_RCA
+    notes: SINCA Vitacura station is regularly cited in PPDA reviews.
+  - place_id: lb-aconcagua-valley
+    name: Valle del Aconcagua (San Esteban / Los Andes)
+    kind: town
+    longitude: TODO_FROM_RCA
+    latitude: TODO_FROM_RCA
+    population: TODO_FROM_RCA
+    source: rca_receptor_list
+    source_url: https://sea.gob.cl/  # TODO_FROM_RCA
+    notes: Secondary downwind receptor in winter Andean drainage flows.
+  - place_id: lb-san-francisco
+    name: San Francisco de Las Condes / Farellones
+    kind: town
+    longitude: TODO_FROM_RCA
+    latitude: TODO_FROM_RCA
+    population: TODO_FROM_RCA
+    source: rca_receptor_list
+    source_url: https://sea.gob.cl/  # TODO_FROM_RCA
+    notes: Mountain ski-resort settlements adjacent to the access road.
+
+sensors:
+  - sensor_id: lb-las-condes
+    mine_id: los-bronces
+    sensor_type: pm10
+    is_compliance_station: true
+    sinca_station_code: D14  # SINCA Las Condes — verify
+    notes: SINCA regulator-grade; primary community receptor.
+  - sensor_id: lb-lo-barnechea
+    mine_id: los-bronces
+    sensor_type: pm10
+    is_compliance_station: true
+    sinca_station_code: TODO_FROM_RCA
+    notes: Closest residential receptor to mine.
+  - sensor_id: lb-vitacura
+    mine_id: los-bronces
+    sensor_type: pm10
+    is_compliance_station: true
+    sinca_station_code: TODO_FROM_RCA
+    notes: SINCA Vitacura.
+  - sensor_id: lb-saturno-faena
+    mine_id: los-bronces
+    sensor_type: pm10
+    is_compliance_station: false
+    notes: Faena monitoring near Saturno area.
+  - sensor_id: lb-confluencia-faena
+    mine_id: los-bronces
+    sensor_type: pm10
+    is_compliance_station: false
+    notes: Faena monitoring at Confluencia processing.
+  - sensor_id: lb-donoso
+    mine_id: los-bronces
+    sensor_type: pm10
+    is_compliance_station: false
+    sinca_station_code: TODO_FROM_RCA
+
+# Per-station threshold overrides. The Los Bronces RCAs +
+# Santiago PPDA impose a lower PM2.5 daily limit than D.S. 12/2011
+# at the eastern Santiago community stations — verify exact value
+# against the current PPDA before deploying. Placeholder values
+# below assume PPDA target ~50 µg/m³ daily PM2.5 with stricter
+# warning at 25; tighten when the actual PPDA cycle is confirmed.
+station_threshold_overrides:
+  - sensor_id: lb-las-condes
+    pm10_warning_ugm3: 80.0  # PPDA stricter warning
+    pm10_breach_ugm3: 150.0
+    pm25_warning_ugm3: 20.0  # PPDA stricter warning
+    pm25_breach_ugm3: 50.0
+    rca_reference: PPDA Región Metropolitana — Las Condes receptor
+    source_url: https://mma.gob.cl/  # TODO_FROM_RCA: PPDA cycle URL
+  - sensor_id: lb-lo-barnechea
+    pm10_warning_ugm3: 80.0
+    pm10_breach_ugm3: 150.0
+    pm25_warning_ugm3: 20.0
+    pm25_breach_ugm3: 50.0
+    rca_reference: PPDA Región Metropolitana — Lo Barnechea receptor;
+      central to 2020 SEA Integrado rejection.
+    source_url: https://mma.gob.cl/  # TODO_FROM_RCA
+  - sensor_id: lb-vitacura
+    pm10_warning_ugm3: 80.0
+    pm10_breach_ugm3: 150.0
+    pm25_warning_ugm3: 20.0
+    pm25_breach_ugm3: 50.0
+    rca_reference: PPDA Región Metropolitana — Vitacura receptor
+    source_url: https://mma.gob.cl/  # TODO_FROM_RCA

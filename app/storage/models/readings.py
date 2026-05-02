@@ -43,6 +43,9 @@ class WeatherReading(Base):
     rainfall_mm_15min: Mapped[float | None] = mapped_column(Float, nullable=True)
     solar_wm2: Mapped[float | None] = mapped_column(Float, nullable=True)
     visibility_m: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Phase L.7: dispersion-modelling inputs.
+    cloud_cover_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    mixing_height_m: Mapped[float | None] = mapped_column(Float, nullable=True)
 
 
 class EquipmentActivity(Base):
