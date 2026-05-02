@@ -54,11 +54,14 @@ def test_get_events_filters_by_station(client: TestClient, api_engine: Engine) -
         s.add(Sensor(sensor_id="cs2", mine_id="m1", sensor_type="pm10"))
         s.commit()
 
+    detected_at = (
+        datetime.now(UTC) - timedelta(minutes=5)
+    ).isoformat().replace("+00:00", "+00:00")
     for station in ("cs1", "cs2"):
         r = client.post(
             "/api/v1/dust-events",
             json={
-                "detected_at": "2026-05-01T12:00:00+00:00",
+                "detected_at": detected_at,
                 "affected_station": station,
                 "peak_pm10": 100.0,
                 "peak_pm25": 40.0,

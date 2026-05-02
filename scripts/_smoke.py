@@ -45,6 +45,8 @@ REQUIRED_ENDPOINTS = [
 AUTH_GATED_ENDPOINTS = [
     ("/api/v1/auth/me", 401),
     ("/api/v1/action-outcomes", 401),
+    ("/api/v1/training-data", 401),
+    ("/api/v1/model-performance", 401),
 ]
 
 PENDING_ENDPOINTS: list[tuple[str, str]] = []

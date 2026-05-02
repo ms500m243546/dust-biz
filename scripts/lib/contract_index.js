@@ -65,6 +65,11 @@ const PHASE_I = [
   { entity: 'ActionOutcome',           schemaModule: 'app.schemas.outcomes',  schemaClass: 'ActionOutcomeSchema',           model: 'ActionOutcome' },
 ];
 
+const PHASE_K = [
+  { entity: 'TrainingRecord',           schemaModule: 'app.schemas.model_performance', schemaClass: 'TrainingRecordSchema',           model: null },
+  { entity: 'ModelPerformanceMetric',   schemaModule: 'app.schemas.model_performance', schemaClass: 'ModelPerformanceMetricSchema',   model: 'ModelPerformanceMetric' },
+];
+
 const REPOSITORIES = [
   { name: 'SensorReadingRepository',         module: 'app.storage.repositories.sensor_readings' },
   { name: 'WeatherReadingRepository',        module: 'app.storage.repositories.weather_readings' },
@@ -85,8 +90,9 @@ const REPOSITORIES = [
   { name: 'RecommendationApprovalRepository', module: 'app.storage.repositories.approvals' },
   { name: 'AuditLogRepository',               module: 'app.storage.repositories.audit' },
   { name: 'ActionOutcomeRepository',          module: 'app.storage.repositories.outcomes' },
+  { name: 'ModelPerformanceMetricRepository', module: 'app.storage.repositories.model_performance' },
 ];
 
-const ENTITIES = [...PHASE_B4, ...PHASE_C, ...PHASE_D, ...PHASE_E, ...PHASE_F, ...PHASE_G, ...PHASE_H, ...PHASE_I];
+const ENTITIES = [...PHASE_B4, ...PHASE_C, ...PHASE_D, ...PHASE_E, ...PHASE_F, ...PHASE_G, ...PHASE_H, ...PHASE_I, ...PHASE_K];
 
-module.exports = { PHASE_B4, PHASE_C, PHASE_D, PHASE_E, PHASE_F, PHASE_G, PHASE_H, PHASE_I, ENTITIES, REPOSITORIES };
+module.exports = { PHASE_B4, PHASE_C, PHASE_D, PHASE_E, PHASE_F, PHASE_G, PHASE_H, PHASE_I, PHASE_K, ENTITIES, REPOSITORIES };

@@ -9,7 +9,62 @@ phase.
 ## Active phase
 
 **Phase K - Feedback, Reporting, ROI.**
-Status: pending plan/approval. See `PLAN.md`.
+Status: in progress. K.1 complete (2026-05-02). K.2 / K.3 / K.4 remain.
+
+**Phase K.1 - S14 outcome-join + model performance metrics.**
+Status: complete (2026-05-02). Closes the predicted-vs-actual loop in
+storage and read-API form; powers the S15 reports landing in K.2.
+
+K.1 changes (validation gate stayed at 15/15):
+- **New ORM `ModelPerformanceMetric`** + repository + Pydantic schema
+  per `data-contracts.md` lines 241-248. Append-only metric rows keyed
+  by `(model_version, model_kind, evaluated_at)` with a JSON
+  `metric_payload` carrying MAE / breach precision-recall /
+  calibration / FPR / FNR / avoided-shutdowns estimate / production
+  loss totals.
+- **`app/domain/training_data.py`** implements S14 from
+  `subsystem-contracts.md`: pure left-anchored join over
+  `DustPrediction × Recommendation × RecommendationApproval ×
+  ActionOutcome` returning `TrainingRecordSchema` rows. Predictions
+  past the configured observation window with no outcome are emitted
+  with `outcome_status="unobserved"` (S14 failure mode). Recommendation
+  linkage uses `linked_prediction_ids` JSON list scan in Python; cheap
+  because callers narrow the window before loading.
+- **`app/domain/model_performance.py`** reduces a list of training
+  records to the persisted `metric_payload`. Heuristics-first per
+  CLAUDE.md rule 13. Avoided-shutdown count is conservative: only
+  counts FP records where the operator approved/overrode (not
+  rejected).
+- **`GET /api/v1/training-data`** returns assembled records with
+  `since_minutes`, `observation_window_minutes`, `model_version`,
+  `outcome_status` filters. Auth-gated.
+- **`GET /api/v1/model-performance`** lists recent persisted metric
+  rows; `POST /api/v1/model-performance/evaluate` computes + persists
+  one row over an explicit window. Evaluate is role-gated
+  (environmental_manager / operations_manager / admin) because the
+  row becomes part of the audit trail used for shadow-mode promotion.
+- **Contract index** registers `PHASE_K` with `TrainingRecord` +
+  `ModelPerformanceMetric`; repositories list adds
+  `ModelPerformanceMetricRepository`. validate-contracts now checks
+  25 entities + 20 repositories.
+- **Smoke** adds two new auth-gated 401 assertions
+  (`/training-data`, `/model-performance`); now 17 happy + 5
+  auth-gated rejections.
+- **23 new backend tests** across schemas / storage / domain /
+  api; total backend tests 371 → 394.
+- **Tactical fix to a pre-existing date-stale fixture in
+  `tests/api/test_dust_events.py::test_get_events_filters_by_station`**
+  — was using `2026-05-01T12:00:00+00:00` against the GET's default
+  24h window, broken on 2026-05-02 onwards. Switched to
+  `datetime.now(UTC) - 5min`. Out-of-scope but blocking the gate.
+
+K.1 risks:
+
+| ID | Severity | Summary | Resolution |
+|---|---|---|---|
+| K1-R1 | low | `Recommendation.linked_prediction_ids` is a JSON list scanned in Python; cardinality is currently fine (<200 rows per typical window) but won't scale once production load arrives | Promote to a join table or Postgres GIN index in K.3 |
+| K1-R2 | low | `model_performance.evaluate` is fired manually via POST; no scheduled evaluation cadence | K.3 background scheduler will trigger nightly evaluation |
+| K1-R3 | low | Avoided-shutdown estimate is correlation-only (not causal) | Documented in domain module; honest by-design |
 
 **Phase J deslop pass.**
 Status: complete (2026-05-01). Post-landing review identified that the
@@ -862,3 +917,4 @@ turning the gate red.
 | 2026-05-01 | D.3          | S4 mine-state compute layer (Phase D step 3 of 4). New ORM `MineStateSnapshot` (`mine_state_snapshots`, append-only) per data-contracts.md:111-122. New schemas `MineStateZoneSchema` + aggregate `MineStateSchema` (with `staleness_flags` field implementing the documented S4 failure mode "mark stale, never fabricate"). New repo `MineStateSnapshotRepository` (add / add_many / latest_for_zone / latest_for_mine). New domain `app/domain/mine_state.py:compute_zone_state(...)` - pure heuristic function: activity summary (top-kind / mixed / unknown) + equipment_active set + dust_generation_potential (baseline x intensity matrix) + wind_exposure (<3 / 3-7 / >=7 m/s thresholds with gust max) + straight-line downwind asset detection (boundary + loading_area + critical zones; geometry-aware version is D3-R3). No model code per CLAUDE.md rule 13. 7 new tests (3 storage, 5 domain, 2 schema). Modified: `app/storage/models/__init__.py`, `scripts/lib/contract_index.js` (PHASE_D + REPOSITORIES). agent-check: 11 PASS / 110 tests. | `phase-d3-mine-state` (pre) + `phase-d3-mine-state-tests` (post) |
 | 2026-05-01 | D.2          | S3 mine-map admin (Phase D step 2 of 4). New repos: `ZoneRepository` (`get` / `get_for_mine` / `upsert`), `HaulRoadSegmentRepository` (same + `mark_watered` / `mark_graded` helpers reserved for Phase G interventions). New routes: `GET/POST /api/v1/zones`, `GET /zones/{id}`, `GET/POST /api/v1/haul-road-segments`, `GET /haul-road-segments/{id}` - both reject unknown `mine_id` with 400. New domain: `MissingSiteConfigError` + `require_resolved(...)` in `site_config_resolver.py` (closes D-R2). 5 new test modules (3 storage, 1 domain, 2 api). Modified: `app/api/main.py` (mount routers), `scripts/_smoke.py` (2 endpoints -> REQUIRED), `scripts/lib/contract_index.js` (2 repos in `REPOSITORIES`). agent-check: 11 PASS / 0 SKIP / 0 FAIL; 100 -> 113 tests. | `phase-d2-mine-map` (pre) + `phase-d2-mine-map-routed` (post) |
 | 2026-05-01 | D.1          | S3 site configuration storage + admin (Phase D step 1 of 4). New: `app/schemas/site_config.py` (`SiteConfigSchema` + `OptimizationWeightsSchema`; WHO/EPA-aligned defaults), `app/storage/models/site_config.py` (`SiteConfiguration` ORM, mutable, `updated_at`/`updated_by` audit), `app/storage/repositories/site_config.py` (get / get_for_mine / upsert), `app/domain/site_config_resolver.py` (3-tier fallback site_config -> mine_defaults -> schema_defaults), `app/api/routes/site_config.py` (`GET/POST /api/v1/site-config`, `GET /api/v1/site-config/{site_id}` with synthetic `default-<mine_id>` resolver path), 3 test modules (api/domain/storage). Modified: `app/storage/models/__init__.py` (export SiteConfiguration), `scripts/lib/contract_index.js` (`PHASE_D` + `SiteConfigRepository`), `app/api/main.py` (mount router), `scripts/_smoke.py` (`/site-config` -> REQUIRED). Bug fixed inline: `intervention_constraints` `None`->{} field_validator (SQLAlchemy default=dict only fires on flush). Resolver fallback to schema_defaults flagged as D-R2 (must be tightened before any automation consumer). agent-check: 11 PASS / 0 SKIP / 0 FAIL. | `phase-d1-site-config` (pre) + `phase-d1-site-config-routed` (post) |
+| 2026-05-02 | K.1          | S14 outcome-join + model performance metrics (Phase K step 1 of 4). New ORM `ModelPerformanceMetric` (`model_performance_metrics`, append-only) per data-contracts.md:241-248. New schemas `TrainingRecordSchema` + `ModelPerformanceMetricSchema` + `EvaluateModelRequest` (`app/schemas/model_performance.py`). New repo `ModelPerformanceMetricRepository`. New domain `app/domain/training_data.py` (S14 left-anchored join over predictions × recommendations × approvals × outcomes; emits `outcome_status="unobserved"` past observation window) and `app/domain/model_performance.py` (heuristic metric_payload: MAE / breach precision-recall / FPR / FNR / calibration / avoided-shutdowns / production-loss totals). New routes `GET /api/v1/training-data` (auth-gated read) + `GET /api/v1/model-performance` + `POST /api/v1/model-performance/evaluate` (role-gated). Modified `app/storage/models/__init__.py`, `app/api/main.py` (2 routers), `scripts/lib/contract_index.js` (PHASE_K + repo entry — 25 entities + 20 repositories), `scripts/_smoke.py` (2 new auth-gated 401 assertions). Tactical fix: `tests/api/test_dust_events.py::test_get_events_filters_by_station` was using a hardcoded 2026-05-01 timestamp against the GET's 24h default window; switched to `datetime.now(UTC) - 5min` to unblock the gate (pre-existing bug, not caused by K.1). 23 new backend tests (storage / domain / schema / api); total 371 → 394. Risks K1-R1 (JSON-list scan for prediction linkage; resolves with K.3 Postgres swap), K1-R2 (no scheduled evaluation; resolves with K.3 scheduler), K1-R3 (avoided-shutdown is correlation-only by design). agent-check: 15 PASS / 0 SKIP / 0 FAIL. | `phase-k1-pre` (pre) + `phase-k1-s14` (post) |

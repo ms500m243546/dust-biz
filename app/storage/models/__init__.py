@@ -16,6 +16,7 @@ from app.storage.models.ingest_errors import IngestError
 from app.storage.models.interventions import InterventionOption
 from app.storage.models.mine import Equipment, HaulRoadSegment, Mine, Sensor, Zone
 from app.storage.models.mine_state import MineStateSnapshot
+from app.storage.models.model_performance import ModelPerformanceMetric
 from app.storage.models.outcomes import ActionOutcome
 from app.storage.models.readings import EquipmentActivity, SensorReading, WeatherReading
 from app.storage.models.recommendations import Recommendation
@@ -38,6 +39,7 @@ __all__ = [
     "InterventionSimulation",
     "Mine",
     "MineStateSnapshot",
+    "ModelPerformanceMetric",
     "Recommendation",
     "RecommendationApproval",
     "Sensor",

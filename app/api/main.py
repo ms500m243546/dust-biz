@@ -22,11 +22,13 @@ from app.api.routes import (
     interventions,
     meta,
     mine_state,
+    model_performance,
     outcomes,
     recommendations,
     sensor_readings,
     simulations,
     site_config,
+    training_data,
     weather_readings,
     zones,
 )
@@ -88,6 +90,8 @@ def create_app() -> FastAPI:
     fastapi_app.include_router(recommendations.router, prefix=API_PREFIX)
     fastapi_app.include_router(approvals.router, prefix=API_PREFIX)
     fastapi_app.include_router(outcomes.router, prefix=API_PREFIX)
+    fastapi_app.include_router(training_data.router, prefix=API_PREFIX)
+    fastapi_app.include_router(model_performance.router, prefix=API_PREFIX)
     fastapi_app.include_router(audit.router, prefix=API_PREFIX)
 
     return fastapi_app
