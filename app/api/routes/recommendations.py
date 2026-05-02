@@ -23,6 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.api.dependencies.auth import current_user
 from app.api.deps import get_session
 from app.domain.recommendations import (
     NoForecastError,
@@ -77,7 +78,10 @@ def get_current_recommendation(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
-@router.post("", response_model=RecommendationSchema)
+@router.post(
+    "", response_model=RecommendationSchema,
+    dependencies=[Depends(current_user)],
+)
 def issue_recommendation(
     payload: IssueRecommendationRequest, session: SessionDep
 ) -> RecommendationSchema:

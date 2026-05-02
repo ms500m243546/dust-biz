@@ -14,9 +14,10 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.api.dependencies.auth import current_user
 from app.api.deps import get_session
 from app.api.main import app
-from app.storage.models import Base
+from app.storage.models import Base, User
 
 
 @pytest.fixture
@@ -46,14 +47,7 @@ def api_session(api_engine: Engine) -> Iterator[Session]:
         session.close()
 
 
-@pytest.fixture
-def client(api_engine: Engine) -> Iterator[TestClient]:
-    """TestClient with get_session override.
-
-    Each request opens a fresh session bound to the shared in-memory
-    engine - this mirrors production where every request gets its own
-    session but they all hit the same DB.
-    """
+def _session_override(api_engine: Engine) -> "callable":  # type: ignore[valid-type]
     factory = sessionmaker(bind=api_engine, autoflush=False, autocommit=False, future=True)
 
     def _override() -> Iterator[Session]:
@@ -67,7 +61,47 @@ def client(api_engine: Engine) -> Iterator[TestClient]:
         finally:
             s.close()
 
-    app.dependency_overrides[get_session] = _override
+    return _override
+
+
+def _fake_admin() -> User:
+    # Default authenticated user for tests that don't specifically
+    # exercise auth gating. Tests that need a different role install
+    # their own override or use `unauthed_client`.
+    return User(
+        user_id="TEST-USER",
+        username="test-user",
+        role="admin",
+        password_hash="x",
+    )
+
+
+@pytest.fixture
+def client(api_engine: Engine) -> Iterator[TestClient]:
+    """TestClient with get_session override and a default admin user.
+
+    Each request opens a fresh session bound to the shared in-memory
+    engine - this mirrors production where every request gets its own
+    session but they all hit the same DB. The default `current_user`
+    override returns an admin so legacy tests don't need to log in.
+    """
+    app.dependency_overrides[get_session] = _session_override(api_engine)
+    app.dependency_overrides[current_user] = _fake_admin
+    try:
+        with TestClient(app) as c:
+            yield c
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def unauthed_client(api_engine: Engine) -> Iterator[TestClient]:
+    """TestClient without the auth override.
+
+    Use for tests that exercise the real auth gating (login flow,
+    role-based 403 paths, missing-token 401 paths).
+    """
+    app.dependency_overrides[get_session] = _session_override(api_engine)
     try:
         with TestClient(app) as c:
             yield c

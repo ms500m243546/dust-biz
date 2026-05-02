@@ -15,6 +15,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.api.dependencies.auth import current_user
 from app.api.deps import get_session
 from app.domain.interventions import list_interventions
 from app.schemas.interventions import InterventionOptionSchema
@@ -42,7 +43,10 @@ def get_intervention(
     return InterventionOptionSchema.model_validate(row)
 
 
-@router.post("", response_model=InterventionOptionSchema, status_code=201)
+@router.post(
+    "", response_model=InterventionOptionSchema, status_code=201,
+    dependencies=[Depends(current_user)],
+)
 def upsert_intervention(
     payload: InterventionOptionSchema, session: SessionDep
 ) -> InterventionOptionSchema:

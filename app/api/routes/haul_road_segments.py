@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.dependencies.auth import current_user
 from app.api.deps import get_session
 from app.schemas.mine import HaulRoadSegmentSchema
 from app.storage.models import HaulRoadSegment, Mine
@@ -50,7 +51,10 @@ def get_segment(segment_id: str, session: SessionDep) -> HaulRoadSegmentSchema:
     return HaulRoadSegmentSchema.model_validate(seg)
 
 
-@router.post("", response_model=HaulRoadSegmentSchema, status_code=201)
+@router.post(
+    "", response_model=HaulRoadSegmentSchema, status_code=201,
+    dependencies=[Depends(current_user)],
+)
 def upsert_segment(
     payload: HaulRoadSegmentSchema, session: SessionDep
 ) -> HaulRoadSegmentSchema:

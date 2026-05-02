@@ -50,6 +50,7 @@ class SiteConfigSchema(BaseModel):
     pm25_thresholds: dict[str, float] = Field(default_factory=lambda: dict(DEFAULT_PM25_THRESHOLDS))
     extreme_breach_threshold: float = Field(default=0.85, ge=0.0, le=1.0)
     low_confidence_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
+    approval_expiry_minutes: int = Field(default=15, ge=1, le=24 * 60)
     optimization_weights: OptimizationWeightsSchema = Field(
         default_factory=OptimizationWeightsSchema
     )
@@ -63,3 +64,10 @@ class SiteConfigSchema(BaseModel):
         # SQLAlchemy `default=dict` fires on flush, so an unflushed ORM row
         # exposes None; treat that as the empty-constraints case.
         return {} if v is None else v
+
+    @field_validator("approval_expiry_minutes", mode="before")
+    @classmethod
+    def _coerce_none_expiry(cls, v: Any) -> Any:
+        # Same flush-default pattern as intervention_constraints: an
+        # unflushed ORM row exposes None even though the column default is 15.
+        return 15 if v is None else v

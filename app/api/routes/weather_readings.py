@@ -13,6 +13,7 @@ from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.dependencies.auth import current_user
 from app.api.deps import get_session
 from app.schemas.weather import RawWeatherReadingSchema
 from app.storage.models import WeatherReading
@@ -51,7 +52,10 @@ def _to_orm(s: RawWeatherReadingSchema) -> WeatherReading:
     )
 
 
-@router.post("", status_code=201, response_model=RawWeatherReadingSchema)
+@router.post(
+    "", status_code=201, response_model=RawWeatherReadingSchema,
+    dependencies=[Depends(current_user)],
+)
 def post_reading(
     payload: dict[str, Any],
     session: SessionDep,
@@ -72,7 +76,10 @@ def post_reading(
     return RawWeatherReadingSchema.model_validate(inserted)
 
 
-@router.post("/batch", status_code=201, response_model=list[RawWeatherReadingSchema])
+@router.post(
+    "/batch", status_code=201, response_model=list[RawWeatherReadingSchema],
+    dependencies=[Depends(current_user)],
+)
 def post_batch(
     payload: list[dict[str, Any]],
     session: SessionDep,

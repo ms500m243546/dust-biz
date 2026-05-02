@@ -19,6 +19,7 @@ from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.dependencies.auth import current_user
 from app.api.deps import get_session
 from app.schemas.sensor import RawSensorReadingSchema
 from app.storage.models import SensorReading
@@ -40,7 +41,10 @@ def _format_validation_errors(exc: ValidationError) -> list[dict[str, Any]]:
     ]
 
 
-@router.post("", status_code=201, response_model=RawSensorReadingSchema)
+@router.post(
+    "", status_code=201, response_model=RawSensorReadingSchema,
+    dependencies=[Depends(current_user)],
+)
 def post_reading(
     payload: dict[str, Any],
     session: SessionDep,
@@ -68,7 +72,10 @@ def post_reading(
     return RawSensorReadingSchema.model_validate(reading)
 
 
-@router.post("/batch", status_code=201, response_model=list[RawSensorReadingSchema])
+@router.post(
+    "/batch", status_code=201, response_model=list[RawSensorReadingSchema],
+    dependencies=[Depends(current_user)],
+)
 def post_batch(
     payload: list[dict[str, Any]],
     session: SessionDep,

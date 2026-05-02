@@ -13,6 +13,7 @@ from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.dependencies.auth import current_user
 from app.api.deps import get_session
 from app.schemas.equipment import RawEquipmentActivitySchema
 from app.storage.models import EquipmentActivity
@@ -46,7 +47,10 @@ def _to_orm(s: RawEquipmentActivitySchema) -> EquipmentActivity:
     )
 
 
-@router.post("", status_code=201, response_model=RawEquipmentActivitySchema)
+@router.post(
+    "", status_code=201, response_model=RawEquipmentActivitySchema,
+    dependencies=[Depends(current_user)],
+)
 def post_activity(
     payload: dict[str, Any],
     session: SessionDep,
@@ -67,7 +71,10 @@ def post_activity(
     return RawEquipmentActivitySchema.model_validate(inserted)
 
 
-@router.post("/batch", status_code=201, response_model=list[RawEquipmentActivitySchema])
+@router.post(
+    "/batch", status_code=201, response_model=list[RawEquipmentActivitySchema],
+    dependencies=[Depends(current_user)],
+)
 def post_batch(
     payload: list[dict[str, Any]],
     session: SessionDep,

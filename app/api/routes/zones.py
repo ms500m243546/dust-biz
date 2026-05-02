@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.dependencies.auth import current_user
 from app.api.deps import get_session
 from app.domain.interventions import UnknownInterventionError, require_known
 from app.schemas.mine import ZoneSchema
@@ -49,7 +50,10 @@ def get_zone(zone_id: str, session: SessionDep) -> ZoneSchema:
     return ZoneSchema.model_validate(zone)
 
 
-@router.post("", response_model=ZoneSchema, status_code=201)
+@router.post(
+    "", response_model=ZoneSchema, status_code=201,
+    dependencies=[Depends(current_user)],
+)
 def upsert_zone(payload: ZoneSchema, session: SessionDep) -> ZoneSchema:
     if session.get(Mine, payload.mine_id) is None:
         raise HTTPException(

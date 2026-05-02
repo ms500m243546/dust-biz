@@ -16,6 +16,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from app.api.dependencies.auth import current_user
 from app.api.deps import get_session
 from app.domain.dust_events import (
     DEFAULT_TRIGGER_BREACH_PROBABILITY,
@@ -31,7 +32,10 @@ router = APIRouter(prefix="/dust-events", tags=["dust-events"])
 SessionDep = Annotated[Session, Depends(get_session)]
 
 
-@router.post("", response_model=DustEventSchema, status_code=201)
+@router.post(
+    "", response_model=DustEventSchema, status_code=201,
+    dependencies=[Depends(current_user)],
+)
 def create_event(payload: DustEventCreate, session: SessionDep) -> DustEventSchema:
     try:
         return record_manual_event(session=session, payload=payload)
@@ -59,7 +63,10 @@ def get_event(event_id: str, session: SessionDep) -> DustEventSchema:
     return DustEventSchema.model_validate(row)
 
 
-@router.post("/from-forecast", response_model=list[DustEventSchema])
+@router.post(
+    "/from-forecast", response_model=list[DustEventSchema],
+    dependencies=[Depends(current_user)],
+)
 def trigger_from_forecast(
     session: SessionDep,
     sensor_id: Annotated[str, Query()],

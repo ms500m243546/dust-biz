@@ -35,6 +35,7 @@ class SiteConfigRepository(BaseRepository):
         optimization_weights: dict[str, float],
         intervention_constraints: dict[str, Any] | None = None,
         updated_by: str | None = None,
+        approval_expiry_minutes: int = 15,
     ) -> SiteConfiguration:
         existing = self.session.get(SiteConfiguration, site_id)
         if existing is None:
@@ -49,6 +50,7 @@ class SiteConfigRepository(BaseRepository):
                 optimization_weights=optimization_weights,
                 intervention_constraints=intervention_constraints or {},
                 updated_by=updated_by,
+                approval_expiry_minutes=approval_expiry_minutes,
             )
             self.session.add(cfg)
         else:
@@ -61,6 +63,7 @@ class SiteConfigRepository(BaseRepository):
             existing.optimization_weights = optimization_weights
             existing.intervention_constraints = intervention_constraints or {}
             existing.updated_by = updated_by
+            existing.approval_expiry_minutes = approval_expiry_minutes
             cfg = existing
         self.session.flush()
         return cfg

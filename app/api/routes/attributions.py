@@ -14,6 +14,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from app.api.dependencies.auth import current_user
 from app.api.deps import get_session
 from app.domain.attribution import EventNotFoundError, attribute_event
 from app.models import registry
@@ -33,7 +34,11 @@ def _ensure_rules_registered() -> None:
         registry.register(RulesBaselineAttributor())
 
 
-@router.post("/for-event/{event_id}", response_model=SourceAttributionSchema)
+@router.post(
+    "/for-event/{event_id}",
+    response_model=SourceAttributionSchema,
+    dependencies=[Depends(current_user)],
+)
 def attribute_for_event(event_id: str, session: SessionDep) -> SourceAttributionSchema:
     _ensure_rules_registered()
     try:

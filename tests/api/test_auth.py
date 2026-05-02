@@ -1,4 +1,9 @@
-"""Auth API tests (Phase I)."""
+"""Auth API tests (Phase I).
+
+Uses `unauthed_client` so the real auth gating is exercised - the
+default `client` fixture overrides `current_user`, which would short
+circuit the real flow.
+"""
 
 from __future__ import annotations
 
@@ -29,10 +34,10 @@ def _seed_user(
 
 
 def test_login_success_returns_bearer_token(
-    client: TestClient, api_session: Session
+    unauthed_client: TestClient, api_session: Session
 ) -> None:
     _seed_user(api_session)
-    r = client.post(
+    r = unauthed_client.post(
         "/api/v1/auth/login",
         json={"username": "alice", "password": "secret"},
     )
@@ -43,8 +48,8 @@ def test_login_success_returns_bearer_token(
     assert body["access_token"]
 
 
-def test_login_unknown_user_401(client: TestClient) -> None:
-    r = client.post(
+def test_login_unknown_user_401(unauthed_client: TestClient) -> None:
+    r = unauthed_client.post(
         "/api/v1/auth/login",
         json={"username": "nobody", "password": "x"},
     )
@@ -52,39 +57,39 @@ def test_login_unknown_user_401(client: TestClient) -> None:
 
 
 def test_login_wrong_password_401(
-    client: TestClient, api_session: Session
+    unauthed_client: TestClient, api_session: Session
 ) -> None:
     _seed_user(api_session)
-    r = client.post(
+    r = unauthed_client.post(
         "/api/v1/auth/login",
         json={"username": "alice", "password": "WRONG"},
     )
     assert r.status_code == 401
 
 
-def test_me_requires_token(client: TestClient) -> None:
-    r = client.get("/api/v1/auth/me")
+def test_me_requires_token(unauthed_client: TestClient) -> None:
+    r = unauthed_client.get("/api/v1/auth/me")
     assert r.status_code == 401
 
 
 def test_me_returns_user_when_authenticated(
-    client: TestClient, api_session: Session
+    unauthed_client: TestClient, api_session: Session
 ) -> None:
     _seed_user(api_session)
-    login = client.post(
+    login = unauthed_client.post(
         "/api/v1/auth/login",
         json={"username": "alice", "password": "secret"},
     )
     token = login.json()["access_token"]
-    r = client.get(
+    r = unauthed_client.get(
         "/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"}
     )
     assert r.status_code == 200, r.text
     assert r.json()["username"] == "alice"
 
 
-def test_me_rejects_garbage_token(client: TestClient) -> None:
-    r = client.get(
+def test_me_rejects_garbage_token(unauthed_client: TestClient) -> None:
+    r = unauthed_client.get(
         "/api/v1/auth/me",
         headers={"Authorization": "Bearer not.a.token"},
     )

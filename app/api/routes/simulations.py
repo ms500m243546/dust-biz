@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.api.dependencies.auth import current_user
 from app.api.deps import get_session
 from app.domain.interventions import UnknownInterventionError
 from app.domain.simulation import (
@@ -43,7 +44,10 @@ class SimulateDoNothingRequest(BaseModel):
     target_zone_id: str = Field(min_length=1)
 
 
-@router.post("/intervention", response_model=InterventionSimulationSchema)
+@router.post(
+    "/intervention", response_model=InterventionSimulationSchema,
+    dependencies=[Depends(current_user)],
+)
 def post_simulate_intervention(
     payload: SimulateInterventionRequest, session: SessionDep
 ) -> InterventionSimulationSchema:
@@ -62,7 +66,10 @@ def post_simulate_intervention(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
-@router.post("/do-nothing", response_model=InterventionSimulationSchema)
+@router.post(
+    "/do-nothing", response_model=InterventionSimulationSchema,
+    dependencies=[Depends(current_user)],
+)
 def post_simulate_do_nothing(
     payload: SimulateDoNothingRequest, session: SessionDep
 ) -> InterventionSimulationSchema:

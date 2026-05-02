@@ -8,7 +8,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, DateTime, Float, ForeignKey, String
+from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
@@ -25,6 +25,7 @@ class SiteConfiguration(Base):
     pm25_thresholds: Mapped[dict[str, float]] = mapped_column(JSON, nullable=False)
     extreme_breach_threshold: Mapped[float] = mapped_column(Float, default=0.85, nullable=False)
     low_confidence_threshold: Mapped[float] = mapped_column(Float, default=0.5, nullable=False)
+    approval_expiry_minutes: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
     optimization_weights: Mapped[dict[str, float]] = mapped_column(JSON, nullable=False)
     intervention_constraints: Mapped[dict[str, Any]] = mapped_column(
         JSON, default=dict, nullable=False

@@ -16,6 +16,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from app.api.dependencies.auth import current_user
 from app.api.deps import get_session
 from app.domain.site_config_resolver import resolve
 from app.schemas.site_config import SiteConfigSchema
@@ -63,7 +64,10 @@ def get_config(site_id: str, session: SessionDep) -> SiteConfigSchema:
     raise HTTPException(status_code=404, detail=f"site_config not found: {site_id}")
 
 
-@router.post("", response_model=SiteConfigSchema, status_code=201)
+@router.post(
+    "", response_model=SiteConfigSchema, status_code=201,
+    dependencies=[Depends(current_user)],
+)
 def upsert_config(payload: SiteConfigSchema, session: SessionDep) -> SiteConfigSchema:
     if session.get(Mine, payload.mine_id) is None:
         raise HTTPException(
@@ -82,5 +86,6 @@ def upsert_config(payload: SiteConfigSchema, session: SessionDep) -> SiteConfigS
         optimization_weights=payload.optimization_weights.model_dump(),
         intervention_constraints=payload.intervention_constraints,
         updated_by=payload.updated_by,
+        approval_expiry_minutes=payload.approval_expiry_minutes,
     )
     return SiteConfigSchema.model_validate(cfg)

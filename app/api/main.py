@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import app as app_pkg
 from app.api import API_PREFIX, API_VERSION
 from app.api.routes import (
+    approvals,
     attributions,
     auth,
     data_quality,
@@ -83,6 +84,7 @@ def create_app() -> FastAPI:
     fastapi_app.include_router(interventions.router, prefix=API_PREFIX)
     fastapi_app.include_router(simulations.router, prefix=API_PREFIX)
     fastapi_app.include_router(recommendations.router, prefix=API_PREFIX)
+    fastapi_app.include_router(approvals.router, prefix=API_PREFIX)
 
     return fastapi_app
 
