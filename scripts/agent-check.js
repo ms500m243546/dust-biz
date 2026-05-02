@@ -47,6 +47,14 @@ const STRUCTURAL_VALIDATORS = [
   { name: 'review-diff',          script: 'checks/review-diff.js' },
 ];
 
+// Web validators (active from Phase J onward; self-skip if web/node_modules absent)
+const WEB_VALIDATORS = [
+  { name: 'web-typecheck', script: 'checks/web-typecheck.js' },
+  { name: 'web-lint',      script: 'checks/web-lint.js' },
+  { name: 'web-test',      script: 'checks/web-test.js' },
+  { name: 'web-build',     script: 'checks/web-build.js' },
+];
+
 const PHASE_B_PENDING = [];
 
 const checks = [
@@ -54,6 +62,7 @@ const checks = [
   ...PYTHON_TOOLING,
   ...CONTRACT_VALIDATORS,
   ...STRUCTURAL_VALIDATORS,
+  ...WEB_VALIDATORS,
   ...PHASE_B_PENDING,
 ];
 

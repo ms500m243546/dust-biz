@@ -8,8 +8,87 @@ phase.
 
 ## Active phase
 
-**Phase J - Dashboard.**
+**Phase K - Feedback, Reporting, ROI.**
 Status: pending plan/approval. See `PLAN.md`.
+
+**Phase J - Dashboard.**
+Status: complete (2026-05-01). Shipped in a single landing.
+- `web/` scaffold (Vite 5 + React 18 + TypeScript 5, strict): `package.json`,
+  `tsconfig.json`, `vite.config.ts`, `index.html`, `.eslintrc.cjs`, `.gitignore`.
+- Typed API client `web/src/api/{client,types}.ts` covering every Phase
+  A-I `GET` endpoint plus `POST /auth/login`, `POST /recommendations/{id}/{approve,reject,override}`,
+  `POST /action-outcomes`, `POST /approvals/sweep-expired`. Token persisted in
+  `localStorage` and attached as `Authorization: Bearer` automatically.
+- Auth: `web/src/auth/{AuthContext,LoginPage,ProtectedRoute}.tsx` enforce
+  sign-in before any operational view renders; logout clears token.
+- Layout shell + 4-view router (`web/src/views/Layout.tsx`,
+  `web/src/App.tsx`): `/control-room`, `/compliance`, `/operations`,
+  `/executive` per `docs/ui-principles.md` four-views requirement.
+- Shared cards: `Card`, `ConfidenceBadge` (always visible per
+  ui-principles "never hide confidence"), `StaleBadge`, `DataQualityWarning`,
+  `StatusPill`, `ErrorBoundary` (per-card fault isolation per
+  ui-principles map-card rule and Architecture rule 2).
+- Control-room view: forecast card, likely-cause card (top probable
+  sources from S7), recommended-action card with approve/reject/override
+  modals wired to S13 (`POST /recommendations/{id}/{approve,reject,override}`),
+  inline mine map (SVG, wind direction, per-zone risk color, click target
+  for D3-R3 future drill-in), sensor health strip, recent dust events.
+  Approve button is **disabled when `risk_class != 'low'`** to honor
+  G1/G13 — operator must override or reject for medium/high risk.
+- Environmental compliance view: PM rolling averages against WHO
+  defaults (`compliance-context.md`), full sensor health table, event
+  list, audit trail backed by `/approvals` + `/action-outcomes` joined
+  client-side (server-side `/audit-logs` endpoint deferred to K with
+  Postgres swap).
+- Operations view: cumulative tonnes-delayed, effectiveness-weighted
+  tonnes-protected estimate, shutdowns-avoided counter (= approved
+  count), ROI deferred-to-K placeholder.
+- Executive view: rolling downtime-avoided (approve+override count),
+  compliance incidents avoided proxy, average effectiveness from S14
+  outcomes feed.
+- `agent-check` extended with **4 web validators**: `web-typecheck`
+  (`tsc --noEmit` strict), `web-lint` (eslint flat-extends config),
+  `web-test` (vitest, 9 tests across api client + shared components),
+  `web-build` (`tsc` + `vite build`). Each self-skips with a clear
+  message if `web/node_modules` is missing, so `npm run agent-check`
+  remains usable without a node_modules install.
+- `docker-compose.yml` gains a `web` service (node:20-alpine, dev
+  profile only) wired to the api service.
+- Smoke unchanged at 17 happy-path endpoints + 3 auth-gated rejections;
+  Phase J is read-only against existing endpoints, no new backend
+  surface.
+- `validate-safety` unchanged at 11 schemas; UI does not introduce
+  Pydantic schemas. `validate-boundaries` still scans 88 Python files
+  in 5 directories (web/ outside its scope).
+- Validation: `npm run agent-check` → **15 PASS / 0 SKIP / 0 FAIL**
+  (was 11 PASS at end of Phase I; +4 web validators).
+
+Open risks introduced in Phase J:
+- **J1-R1 (low):** Audit trail card composes `/approvals` +
+  `/action-outcomes` client-side rather than reading `audit_logs`
+  directly. Server-side `/audit-logs` endpoint lands in K alongside
+  the Postgres swap (D3-R2). Mitigation: client composition is
+  display-only; the canonical record stays in `audit_logs`.
+- **J1-R2 (low):** Mine map uses a synthetic grid layout (no GeoJSON)
+  pending D3-R3 terrain-aware geometry. Wind direction arrow and
+  per-zone color render correctly; spatial accuracy lands with the
+  GeoJSON contract.
+- **J1-R3 (low):** ROI card is a placeholder. Real ROI requires
+  `site_config.cost_curves` (G3-R1) and predicted-vs-actual join
+  (S14, Phase K).
+- **J1-R4 (low):** PM threshold defaults hardcoded to WHO 24h values
+  in the Compliance view; should read from `site_config` per R2 once
+  the per-site override schema is consumer-aware.
+- **J1-R5 (low):** `web/node_modules` size; CI-style installs add
+  setup time. Mitigation: validators self-skip cleanly when not
+  installed, so the gate stays usable.
+
+Closed during Phase J:
+- None. Phase J is purely additive.
+
+Phase I read-side endpoints (I1-R1) remain open and unchanged — the
+dashboard intentionally consumes them anonymously in MVP per the
+documented K hardening pass.
 
 **Phase I - Human Approval Workflow.**
 Status: complete (2026-05-01). All five sub-steps shipped.
@@ -440,8 +519,8 @@ Status: complete (approved 2026-04-30; auto-validated continuously).
 | G     | Intervention Simulation        | pending     |
 | H     | Recommendation Engine          | pending     |
 | I     | Human Approval Workflow        | pending     |
-| J     | Dashboard                      | pending     |
-| K     | Feedback, Reporting, ROI       | pending     |
+| J     | Dashboard                      | complete    |
+| K     | Feedback, Reporting, ROI       | pending (next) |
 
 No phase begins before the previous one is validated and approved.
 Full deliverables per phase are in `PLAN.md`.

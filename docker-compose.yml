@@ -1,6 +1,5 @@
-# DustOps AI - Phase B.5 minimal compose.
-# Backend only. Postgres / TimescaleDB and frontend service land in
-# later phases (Phase C for ingestion-ready storage, Phase J for UI).
+# DustOps AI compose. Backend (Phase B+) and dashboard (Phase J).
+# Postgres / TimescaleDB swap deferred to Phase K per architecture swap criteria.
 
 services:
   api:
@@ -11,7 +10,18 @@ services:
       - "8000:8000"
     environment:
       DUSTOPS_LOG_LEVEL: INFO
-      # Default to in-container SQLite; switch to Postgres URL when the
-      # db service lands.
       DUSTOPS_DATABASE_URL: sqlite:////tmp/dustops.db
     restart: unless-stopped
+
+  web:
+    image: node:20-alpine
+    container_name: dustops-web
+    working_dir: /app
+    volumes:
+      - ./web:/app
+    command: sh -c "npm install --no-audit --no-fund && npm run dev -- --host 0.0.0.0"
+    ports:
+      - "5173:5173"
+    depends_on:
+      - api
+    profiles: ["dev"]
