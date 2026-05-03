@@ -109,6 +109,12 @@ code { font-family: 'SF Mono', Menlo, monospace; font-size: 0.9em; background: r
 .sensor-strip { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
 .sensor-tile { width: 14px; height: 14px; border-radius: 3px; display: inline-block; }
 
+.per-receptor-table { width: 100%; }
+.per-receptor-row td { border-left: 3px solid transparent; }
+.per-receptor-row.per-receptor-grey td:first-child { border-left-color: var(--grey); }
+.per-receptor-row.per-receptor-yellow td:first-child { border-left-color: var(--yellow); }
+.per-receptor-row.per-receptor-red td:first-child { border-left-color: var(--red); }
+
 .audit-table { width: 100%; border-collapse: collapse; font-size: 0.85em; }
 .audit-table th, .audit-table td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--border); }
 .audit-table th { color: var(--muted); font-weight: 600; }

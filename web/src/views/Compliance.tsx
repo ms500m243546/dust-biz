@@ -3,7 +3,9 @@ import { CalibrationBadge } from '../components/CalibrationBadge';
 import { Card } from '../components/Card';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { EvidenceChip } from '../components/EvidenceChip';
+import { PerReceptorTable } from '../components/PerReceptorTable';
 import { useApi } from '../hooks/useApi';
+import type { PerReceptorEntry } from '../api/types';
 import { api } from '../api/client';
 import { complianceKpis } from '../api/kpi';
 import { SensorHealthStrip } from './SensorHealthStrip';
@@ -34,6 +36,11 @@ export function Compliance() {
     (latestProtocol?.warnings ?? []).find((w) =>
       /calibration acceptance gate overridden/.test(w),
     ) ?? null;
+  const perReceptor =
+    (latestMetric?.metric_payload?.per_receptor as
+      | Record<string, PerReceptorEntry>
+      | null
+      | undefined) ?? null;
 
   return (
     <div className="view-grid">
@@ -149,6 +156,25 @@ export function Compliance() {
           ) : (
             <p className="muted">No model_performance rows yet.</p>
           )}
+        </Card>
+      </ErrorBoundary>
+
+      <ErrorBoundary label="Per-receptor fairness">
+        <Card
+          title="Per-receptor fairness (M.4.2)"
+          subtitle={
+            latestMetric
+              ? `${latestMetric.model_version} — sorted worst-MAE first`
+              : 'No evaluations yet'
+          }
+        >
+          <PerReceptorTable perReceptor={perReceptor} />
+          <p className="muted">
+            Per-station split of headline metrics. An aggregate-good
+            model can still be unfair to a specific receptor; this
+            surface is what the Goodhart-canary discipline checks
+            against before any automation promotion.
+          </p>
         </Card>
       </ErrorBoundary>
 

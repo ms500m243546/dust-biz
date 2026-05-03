@@ -157,6 +157,31 @@ export interface InterventionSimulationSchema {
   selection_bias_caveat: boolean;
 }
 
+// M.4.2 — one row of the per_receptor breakdown. Mirrors the dict
+// produced by app.domain.model_performance._per_receptor_breakdown.
+export interface PerReceptorEntry {
+  target_kind?: string;
+  sample_count?: number;
+  mae_pm10?: number | null;
+  breach_precision?: number | null;
+  breach_recall?: number | null;
+  false_positive_rate?: number | null;
+  false_negative_rate?: number | null;
+  // ece is reserved for a future M.4 sub-phase that adds per-receptor
+  // calibration bins; absent in current backend output.
+  ece?: number | null;
+}
+
+// Q.3 — distribution-shift block. Populated when compute_metric_payload
+// receives a `trained_on_mine` that differs from any evaluated
+// receptor's mine.
+export interface CrossMineEvalBlock {
+  trained_on_mine: string;
+  evaluated_on_mines: string[];
+  cross_mine_receptors: string[];
+  warning: string;
+}
+
 // M.4.1 — calibration reliability bin (10-bin reliability table).
 export interface CalibrationBin {
   lower: number;
@@ -187,6 +212,15 @@ export interface ModelPerformanceMetricSchema {
     brier_score?: number | null;
     avoided_shutdowns_estimate?: number;
     production_loss_tonnes_total?: number;
+    // M.4.2 — per-receptor split. One entry per target_id (sensor /
+    // zone). Empty dict in single-receptor evaluations.
+    per_receptor?: Record<string, PerReceptorEntry>;
+    canary_metrics?: Record<string, number | null>;
+    // Q.3 — multi-station discipline caveats. Null when the bias does
+    // not apply to the current evaluation.
+    survivor_caveat?: string | null;
+    selection_caveat?: string | null;
+    cross_mine_eval?: CrossMineEvalBlock | null;
     protocol?: {
       protocol_version?: string;
       protocol_hash?: string;
