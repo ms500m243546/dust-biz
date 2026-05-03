@@ -50,12 +50,14 @@ def _record(
     human_action: str = "approved",
     outcome_status: str = "observed",
     production_loss: float | None = 200.0,
+    target_id: str = "Z-1",
+    target_kind: str = "zone",
 ) -> TrainingRecordSchema:
     return TrainingRecordSchema(
         prediction_id="PRED-X",
         issued_at=datetime(2026, 5, 1, 10, 0),
-        target_kind="zone",
-        target_id="Z-1",
+        target_kind=target_kind,
+        target_id=target_id,
         forecast_horizon="30m",
         predicted_pm10=predicted_pm10,
         predicted_pm25=42.0,
@@ -229,3 +231,53 @@ def test_brier_score_squared_error_arithmetic() -> None:
     ]
     payload = compute_metric_payload(records, protocol=_good_protocol())
     assert payload["brier_score"] == pytest.approx((0.04 + 0.09) / 2)
+
+
+# ---------------------------------------------------------------------------
+# M.4.2 — fairness (B-32) + Goodhart canaries (B-44).
+# ---------------------------------------------------------------------------
+
+
+def test_per_receptor_breakdown_splits_by_target_id() -> None:
+    """Cuncumén-vs-Caimanes asymmetry: aggregate-good can hide per-receptor."""
+    records = [
+        # Receptor A: model is perfect.
+        _record(target_id="cuncumen", breach_prob=0.9, breach_actual=True),
+        _record(target_id="cuncumen", breach_prob=0.1, breach_actual=False),
+        # Receptor B: model misses every breach.
+        _record(target_id="caimanes", breach_prob=0.2, breach_actual=True),
+        _record(target_id="caimanes", breach_prob=0.2, breach_actual=True),
+    ]
+    payload = compute_metric_payload(records, protocol=_good_protocol())
+    per = payload["per_receptor"]
+    assert set(per.keys()) == {"cuncumen", "caimanes"}
+    assert per["cuncumen"]["breach_recall"] == 1.0
+    assert per["caimanes"]["breach_recall"] == 0.0  # gaming hidden in aggregate
+    assert per["cuncumen"]["sample_count"] == 2
+    assert per["caimanes"]["sample_count"] == 2
+
+
+def test_canary_metrics_pair_every_deployable_kpi() -> None:
+    records = [
+        _record(breach_prob=0.9, breach_actual=True),
+        _record(breach_prob=0.1, breach_actual=False),
+    ]
+    payload = compute_metric_payload(records, protocol=_good_protocol())
+    canary = payload["canary_metrics"]
+    # Every key in GOODHART_CANARY_PAIRS must be present in canary_metrics.
+    from app.domain.model_performance import GOODHART_CANARY_PAIRS
+    assert set(canary.keys()) == set(GOODHART_CANARY_PAIRS.keys())
+    # `breach_precision` is paired with `breach_recall` — value should
+    # equal the recall, not the precision.
+    assert canary["breach_precision"] == payload["breach_recall"]
+    assert canary["false_positive_rate"] == payload["breach_recall"]
+    assert canary["avoided_shutdowns_estimate"] == payload["false_negative_rate"]
+
+
+def test_per_receptor_empty_on_unobserved_only_records() -> None:
+    records = [
+        _record(breach_prob=0.6, breach_actual=None, outcome_status="unobserved")
+    ]
+    payload = compute_metric_payload(records, protocol=_good_protocol())
+    assert payload["per_receptor"] == {}
+    assert payload["canary_metrics"] == {}

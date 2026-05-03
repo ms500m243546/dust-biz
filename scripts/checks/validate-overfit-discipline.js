@@ -200,6 +200,26 @@ function main() {
           `metric_id=${row.metric_id}: metric_payload.brier_score missing on a row with observed_count=${payload.observed_count}`
         );
       }
+      // M.4.2 — fairness + Goodhart canary fields.
+      if (
+        payload.per_receptor === undefined ||
+        typeof payload.per_receptor !== 'object' ||
+        payload.per_receptor === null
+      ) {
+        errors.push(
+          `metric_id=${row.metric_id}: metric_payload.per_receptor missing or non-object (B-32 fairness audit, M.4.2)`
+        );
+      }
+      if (
+        payload.canary_metrics === undefined ||
+        typeof payload.canary_metrics !== 'object' ||
+        payload.canary_metrics === null
+      ) {
+        errors.push(
+          `metric_id=${row.metric_id}: metric_payload.canary_metrics missing or non-object (B-44 Goodhart canary, M.4.2)`
+        );
+      }
+
       // ECE acceptance gate cross-check: if ece > max_ece, the row
       // must carry an override warning (the gate would have raised
       // otherwise — this catches manually-inserted rows).

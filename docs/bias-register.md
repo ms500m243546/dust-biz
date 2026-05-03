@@ -4,7 +4,7 @@ The full bias / integrity-hazard surface for DustOps, ranked by current exposure
 
 This is a living document. New biases are appended; mitigated biases stay listed (with their mitigation phase) so the audit trail is complete. Every architect-protocol planning response (per `docs/architect_protocol.md` §3) must scan this register and call out which entries the proposed change touches.
 
-Last reviewed: **2026-05-03 (Phase M.4.1)**.
+Last reviewed: **2026-05-03 (Phase M.4.2)**.
 
 ---
 
@@ -81,7 +81,7 @@ Last reviewed: **2026-05-03 (Phase M.4.1)**.
 
 | # | Family | Bias | Exposure today | Mitigation phase | Status | Notes |
 |---|---|---|---|---|---|---|
-| B-32 | Fairness | Receptor-priority asymmetry — model trained to minimize "average" PM10 may disproportionately allow high readings at less-visible receptors (Caimanes) vs more-visible (Cuncumén) | Medium | M.4 | Open | Per-receptor breach-rate audit in S15; `project_target_mines.md` makes this load-bearing. |
+| B-32 | Fairness | Receptor-priority asymmetry — model trained to minimize "average" PM10 may disproportionately allow high readings at less-visible receptors (Caimanes) vs more-visible (Cuncumén) | Medium | M.4.2 | **Mitigated (M.4.2)** | `metric_payload.per_receptor` splits all headline metrics by `target_id`; the validator asserts the block is present on every M.4-tagged row. Worst-receptor flagging is the operator's read; the data is now there to look at. |
 | B-33 | Fairness | Operator-priority bias — model weighted toward production preservation because labeled outcomes only cover interventions operators chose to act on | Medium | M.3.1 (disclosure) + M.4 (production-cost recalibration) | **Mitigated-via-disclosure (M.3.1)** | `InterventionSimulation.selection_bias_caveat=True` by default; flag travels with every cost estimate. True recalibration deferred to operator-real telematics + M.4. |
 
 ## Engineering / data-quality hazards
@@ -108,7 +108,7 @@ Last reviewed: **2026-05-03 (Phase M.4.1)**.
 
 | # | Family | Bias | Exposure today | Mitigation phase | Status | Notes |
 |---|---|---|---|---|---|---|
-| B-44 | Operational | Goodhart's law on the deployed metric — once "minimize FPR" is the KPI, operators game it (e.g. turn off sensor before drilling) | Latent → high once deployed | M.4 | Deferred | Each KPI gets a paired counter-metric (canary). |
+| B-44 | Operational | Goodhart's law on the deployed metric — once "minimize FPR" is the KPI, operators game it (e.g. turn off sensor before drilling) | Latent → high once deployed | M.4.2 | **Mitigated (M.4.2)** | `metric_payload.canary_metrics` pairs every deployable KPI with a counter-metric (`breach_precision`↔`breach_recall`, `false_positive_rate`↔`breach_recall`, `avoided_shutdowns_estimate`↔`false_negative_rate`, `production_loss_tonnes_total`↔`breach_recall`). Validator asserts the block is present. Detection is structural; the operational response (alerting on canary drift) is M.4.3 / post-deployment. |
 
 ---
 

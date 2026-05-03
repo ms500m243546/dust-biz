@@ -127,6 +127,29 @@ to reconstruct what the model saw.
 
 ---
 
+## Goodhart-canary discipline (M.4.2)
+
+A KPI used to gate model promotion or operational decisions is, by definition, a target — and any target can be gamed. This guardrail prevents silent gaming.
+
+Every persisted `model_performance_metrics.metric_payload` row at protocol_version M.4+ must include a `canary_metrics` block. The block pairs each KPI an operator might deploy against with a paired *counter-metric* whose movement reveals the gaming:
+
+| KPI | Counter-metric | What gaming would look like |
+|---|---|---|
+| `breach_precision` | `breach_recall` | Under-firing → precision↑, recall↓ |
+| `false_positive_rate` | `breach_recall` | Same: under-firing → FPR↓, recall↓ |
+| `avoided_shutdowns_estimate` | `false_negative_rate` | Inflating "avoided" by missing real breaches → FNR↑ |
+| `production_loss_tonnes_total` | `breach_recall` | "Low loss" because the model isn't firing → recall↓ |
+
+The pairs are encoded in `app.domain.model_performance.GOODHART_CANARY_PAIRS`. The agent-check gate enforces presence; alerting on drift between KPI and canary is M.4.3 (drift watch).
+
+A model is **not promoted to a higher automation level** unless its canary metrics for the target KPI are also acceptable. This rule is binding on all promotion decisions per `docs/safety-guardrails.md` rule 13.
+
+## Per-receptor fairness audit (M.4.2)
+
+`metric_payload.per_receptor` carries the same headline metrics as the aggregate, split by `target_id`. Operators reviewing model performance must check that the worst-receptor metrics are within tolerance — an aggregate-good model can still be unfair to a specific receptor (Cuncumén-vs-Caimanes asymmetry, B-32). M.4.2 supplies the data; flagging logic for "worst-receptor breach rate exceeds threshold" is operator-side until M.4.3.
+
+---
+
 ## Mandatory audit list
 
 The audit log (S15) must persist:

@@ -58,6 +58,73 @@ def _safe_div(num: float, den: float) -> float | None:
     return None if den == 0 else num / den
 
 
+# M.4.2 — Goodhart canary pairs. Each "deployable KPI" is paired with a
+# counter-metric whose movement the wrong way reveals gaming. The pairs
+# are encoded once here so every metric_payload carries the same shape;
+# the validator scans for these key names.
+GOODHART_CANARY_PAIRS: dict[str, str] = {
+    # Maximizing precision by under-firing → recall craters. Pair them.
+    "breach_precision": "breach_recall",
+    # Minimizing FPR by under-firing → recall craters too.
+    "false_positive_rate": "breach_recall",
+    # Inflating "avoided shutdowns" by missing real breaches → FNR rises.
+    "avoided_shutdowns_estimate": "false_negative_rate",
+    # Minimizing production-loss by ignoring breaches → recall craters.
+    "production_loss_tonnes_total": "breach_recall",
+}
+
+
+def _per_receptor_breakdown(
+    observed: list[TrainingRecordSchema],
+) -> dict[str, dict[str, Any]]:
+    """B-32 mitigation — split metrics by `target_id` (the receptor).
+
+    Returns a dict keyed by `target_id`. For each receptor, the same
+    breach-precision / recall / FPR / FNR / mae as the aggregate, plus
+    `target_kind` and the sample count. Missing data (no observed
+    records for that receptor in the window) → empty dict for that key.
+
+    Why per-receptor: Cuncumén-vs-Caimanes asymmetry. A model that
+    optimizes "average" PM10 may disproportionately allow high readings
+    at less-visible receptors. Splitting the metrics surfaces the gap.
+    """
+    by_id: dict[str, list[TrainingRecordSchema]] = {}
+    for r in observed:
+        by_id.setdefault(r.target_id, []).append(r)
+
+    out: dict[str, dict[str, Any]] = {}
+    for target_id, group in by_id.items():
+        tp = fp = tn = fn = 0
+        abs_errors: list[float] = []
+        for r in group:
+            breach_actual = bool(r.breach_occurred)
+            breach_predicted = (
+                r.predicted_breach_probability >= BREACH_DECISION_THRESHOLD
+            )
+            if r.actual_pm10_peak is not None:
+                abs_errors.append(abs(r.predicted_pm10 - r.actual_pm10_peak))
+            if breach_predicted and breach_actual:
+                tp += 1
+            elif breach_predicted and not breach_actual:
+                fp += 1
+            elif not breach_predicted and breach_actual:
+                fn += 1
+            else:
+                tn += 1
+        out[target_id] = {
+            "target_kind": group[0].target_kind,
+            "sample_count": len(group),
+            "mae_pm10": (
+                sum(abs_errors) / len(abs_errors) if abs_errors else None
+            ),
+            "breach_precision": _safe_div(tp, tp + fp),
+            "breach_recall": _safe_div(tp, tp + fn),
+            "false_positive_rate": _safe_div(fp, fp + tn),
+            "false_negative_rate": _safe_div(fn, fn + tp),
+        }
+    return out
+
+
 def _calibration_breakdown(
     pairs: list[tuple[float, bool]],
     *,
@@ -167,6 +234,8 @@ def compute_metric_payload(
             "brier_score": None,
             "avoided_shutdowns_estimate": 0,
             "production_loss_tonnes_total": 0.0,
+            "per_receptor": {},
+            "canary_metrics": {},
             "protocol": protocol_block,
         }
 
@@ -218,6 +287,30 @@ def compute_metric_payload(
             f"reason={protocol.ece_override_reason!r}"
         )
 
+    breach_precision = _safe_div(tp, tp + fp)
+    breach_recall = _safe_div(tp, tp + fn)
+    false_positive_rate = _safe_div(fp, fp + tn)
+    false_negative_rate = _safe_div(fn, fn + tp)
+
+    # M.4.2 — Goodhart canary pairs. Persisted alongside the headline
+    # KPIs so any deployment threshold based on those KPIs has its
+    # paired counter-metric available for review (per
+    # docs/safety-guardrails.md). The numeric values are the canary
+    # metric's value, not the KPI itself.
+    available: dict[str, float | int | None] = {
+        "breach_precision": breach_precision,
+        "breach_recall": breach_recall,
+        "false_positive_rate": false_positive_rate,
+        "false_negative_rate": false_negative_rate,
+        "avoided_shutdowns_estimate": avoided,
+        "production_loss_tonnes_total": production_loss_total,
+    }
+    canary_metrics = {
+        kpi: available[canary]
+        for kpi, canary in GOODHART_CANARY_PAIRS.items()
+        if canary in available
+    }
+
     return {
         "sample_count": len(records),
         "observed_count": len(observed),
@@ -227,10 +320,10 @@ def compute_metric_payload(
             if abs_errors_pm10
             else None
         ),
-        "breach_precision": _safe_div(tp, tp + fp),
-        "breach_recall": _safe_div(tp, tp + fn),
-        "false_positive_rate": _safe_div(fp, fp + tn),
-        "false_negative_rate": _safe_div(fn, fn + tp),
+        "breach_precision": breach_precision,
+        "breach_recall": breach_recall,
+        "false_positive_rate": false_positive_rate,
+        "false_negative_rate": false_negative_rate,
         "calibration_error": (
             sum(cal_terms) / len(cal_terms) if cal_terms else None
         ),
@@ -239,6 +332,8 @@ def compute_metric_payload(
         "brier_score": brier,
         "avoided_shutdowns_estimate": avoided,
         "production_loss_tonnes_total": production_loss_total,
+        "per_receptor": _per_receptor_breakdown(observed),
+        "canary_metrics": canary_metrics,
         "protocol": protocol_block,
     }
 
@@ -246,5 +341,6 @@ def compute_metric_payload(
 __all__ = [
     "BREACH_DECISION_THRESHOLD",
     "CALIBRATION_BIN_COUNT",
+    "GOODHART_CANARY_PAIRS",
     "compute_metric_payload",
 ]
