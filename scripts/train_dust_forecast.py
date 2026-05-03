@@ -24,13 +24,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from app.schemas.forecasts import ForecastHorizon  # noqa: E402
 from app.training.dust_forecast_training import (  # noqa: E402
     DEFAULT_HORIZON,
     build_p1_protocol,
     train_one,
 )
-from app.schemas.forecasts import ForecastHorizon  # noqa: E402
-
 
 # Phase P.1 default windows. Cuncumén has data from 2025-05-03 →
 # 2026-05-03 (12 mo). Train: first 9 mo. Validation: next 1.5 mo.
@@ -100,20 +99,23 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     horizon: ForecastHorizon = args.horizon  # type: ignore[assignment]
-    try:
+    from app.storage.database import session_scope  # noqa: E402
+
+    with session_scope() as session:
         result = train_one(
             station_id=args.station,
+            session=session,
             horizon=horizon,
             protocol=protocol,
             persist=not args.no_persist,
         )
-    except NotImplementedError as exc:
-        print(f"train_one: {exc}", file=sys.stderr)
-        return 2
     print(
         f"trained {result.model_version} for station={result.station_id} "
-        f"horizon={result.horizon}: ece={result.ece} mae_pm10={result.mae_pm10} "
-        f"breach_recall={result.breach_recall}"
+        f"horizon={result.horizon}: train_n={result.train_record_count} "
+        f"test_n={result.test_record_count} ece={result.ece} "
+        f"mae_pm10={result.mae_pm10} breach_recall={result.breach_recall} "
+        f"recalibrated={result.recalibrated} "
+        f"artifact={result.artifact_path} metric_id={result.metric_row_id}"
     )
     return 0
 

@@ -78,11 +78,17 @@ def test_artifact_path_respects_caller_supplied_root(tmp_path: Path) -> None:
     assert tmp_path in p.parents
 
 
-def test_predict_skeleton_raises_until_p2_lands() -> None:
-    # P.1 contract: predict raises NotImplementedError. The error
-    # message names Phase P.2 so future readers know where to look.
-    f = GBMForecaster()
-    target = ForecastTargetSchema(target_kind="sensor", target_id="lp-em05-cuncumen")
+def test_predict_raises_artifact_not_found_when_no_artifact(tmp_path: Path) -> None:
+    # P.2 contract: predict() loads a fitted artifact lazily. If the
+    # (station, horizon) artifact is missing on disk, the loader
+    # raises ModelArtifactNotFoundError so the registry / fallback
+    # chain can decide whether to fall back to the heuristic
+    # baseline (Guardrail 11). Use a tmp_path artifact root to
+    # guarantee the file isn't there.
+    from app.models.forecasting.gbm_v0_1_0 import ModelArtifactNotFoundError
+
+    f = GBMForecaster(artifact_root=tmp_path)
+    target = ForecastTargetSchema(target_kind="sensor", target_id="ghost-station")
     features = FeatureRecordSchema(
         timestamp=datetime(2026, 5, 3, 12, 0),
         zone_id="z",
@@ -90,7 +96,7 @@ def test_predict_skeleton_raises_until_p2_lands() -> None:
         feature_payload={},
         missing_inputs=[],
     )
-    with pytest.raises(NotImplementedError, match="P.2"):
+    with pytest.raises(ModelArtifactNotFoundError):
         f.predict(features=features, target=target, horizon="60min")
 
 

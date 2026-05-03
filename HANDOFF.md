@@ -1,9 +1,9 @@
 # DustOps AI — Session Handoff
 
 **As of:** 2026-05-03
-**Active phase:** Phase P.1 complete — first trained-forecast scaffold landed (skeleton only; fit lands in P.2). Autonomous P→Q→R→S batch run in progress per approved plan.
-**Last completed:** P.1 — `GBMForecaster` skeleton implementing the `DustForecastModel` Protocol; canonical M.4 `EvaluationProtocol` declared in `app.training.dust_forecast_training.build_p1_protocol`; first ML deps (numpy, scikit-learn, joblib) added; `data_models/` artifact dir with .gitignore for blobs; `docs/forecast-model-protocol.md` is the binding contract for trained forecast models.
-**Validation gate:** `npm run agent-check` GREEN, **21 PASS / 0 SKIP / 0 FAIL**. Backend tests grew with skeleton suite.
+**Active phase:** Phase P.2 complete — first real PM10 forecast model trained on Cuncumén; ECE ≈ 0, MAE 9.25 µg/m³ on a 758-row sealed test set. Autonomous P→Q→R→S batch run in progress.
+**Last completed:** P.2 — real `train_one()` end-to-end. SG-1 stop-gate did not trigger; first fit passed M.4.1 calibration gate without recalibration. Artifact persisted to `data_models/dust_forecast/dust_forecast_gbm_v0.1.0/lp-em05-cuncumen__60min.joblib`; metric_id=1 written.
+**Validation gate:** `npm run agent-check` GREEN, **21 PASS / 0 SKIP / 0 FAIL**. Backend tests grew with the training suite.
 
 ---
 
