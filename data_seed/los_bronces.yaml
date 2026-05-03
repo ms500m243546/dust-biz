@@ -100,34 +100,55 @@ populated_places:
     notes: Mountain ski-resort settlements adjacent to the access road.
 
 sensors:
+  # Phase O.2 — corrected SINCA code (was placeholder "D14"; the
+  # MMA-portal numeric code is 239) and added the metadata fields the
+  # orchestrator needs (region_path / resolution / data_status). Las
+  # Condes 239 is the closest MMA-operated, ENAC-accredited urban
+  # station to Los Bronces with continuous hourly PM10+PM2.5 from
+  # 1997-04-24. ~25 km SW of pit; westerly Andes-drainage receptor.
+  # Captures Santiago-basin background — model trained against this
+  # series must separate basin pollution from mine plume.
   - sensor_id: lb-las-condes
     mine_id: los-bronces
     sensor_type: pm10
     is_compliance_station: true
-    sinca_station_code: D14  # SINCA Las Condes — verify
-    notes: SINCA regulator-grade; primary community receptor.
+    sinca_station_code: "239"
+    sinca_macro_id: D13
+    sinca_param_code: PM10
+    sinca_region_path: RM
+    sinca_resolution: horario
+    sinca_data_status: has_data
+    notes: SINCA Las Condes (MMA-operated, ENAC-accredited 2024).
+      Hourly PM10 from 1997-04-24; primary community receptor.
+      Empirical macropath ./RM/D13/Cal/PM10 — uses legacy string
+      param code (older station vintage), not the numeric 0001 used
+      by Calama 207/275. Verified 2026-05-03 — 6,959 of 8,785 hours
+      had values across the 12-month window (~79% density).
   - sensor_id: lb-lo-barnechea
     mine_id: los-bronces
     sensor_type: pm10
     is_compliance_station: true
     sinca_station_code: TODO_FROM_RCA
-    notes: Closest residential receptor to mine.
+    notes: Closest residential receptor to mine. No SINCA-public
+      station verified — likely operator-private or via SMA filings.
   - sensor_id: lb-vitacura
     mine_id: los-bronces
     sensor_type: pm10
     is_compliance_station: true
     sinca_station_code: TODO_FROM_RCA
-    notes: SINCA Vitacura.
+    notes: SINCA Vitacura — code not yet verified against the MMA
+      portal; deferred to a follow-up survey pass.
   - sensor_id: lb-saturno-faena
     mine_id: los-bronces
     sensor_type: pm10
     is_compliance_station: false
-    notes: Faena monitoring near Saturno area.
+    notes: Faena monitoring near Saturno area. Operator-private —
+      depends on Anglo American partnership data.
   - sensor_id: lb-confluencia-faena
     mine_id: los-bronces
     sensor_type: pm10
     is_compliance_station: false
-    notes: Faena monitoring at Confluencia processing.
+    notes: Faena monitoring at Confluencia processing. Operator-private.
   - sensor_id: lb-donoso
     mine_id: los-bronces
     sensor_type: pm10

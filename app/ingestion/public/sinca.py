@@ -285,23 +285,48 @@ def build_url(
     window_to: datetime,
     region_path: str = "RM",
     resolution: str = "horario",
+    macro_id: str | None = None,
+    param_code: str | None = None,
 ) -> str:
     """Build the SINCA `tsindico2.cgi` Excel-export URL.
 
     Verified empirically against the live portal (Cuncumén station 424
     in Coquimbo / RIV) on 2026-05-02. The macro structure is:
 
-        ./<region_path>/<station_code>/Cal/<PARAM>/<PARAM>.<res>.<res>.ic
+        ./<region_path>/<macro_id>/Cal/<PARAM>/<PARAM>.<res>.<res>.ic
 
     Date format is YYMMDDHH — `from` is anchored to hour 00, `to` to
     hour 23 of each calendar day. `region_path` follows SINCA's
     internal taxonomy (RM, RIV, RV, ...); `resolution` is one of
     "horario" (hourly) or "diario" (daily).
+
+    `macro_id` and `param_code` overrides (Phase O.2): empirically the
+    SINCA portal uses two parallel taxonomies. The public station id
+    used in `index.php/estacion/index/id/<id>` (e.g. 239 = Las Condes,
+    207 = Calama Club 23 de Marzo) is *not* the macro identifier used
+    in the data-gateway path. The macro id is a separate alphanumeric
+    code (e.g. D13 for Las Condes, 233 for Calama 207). Likewise some
+    stations identify the parameter as the legacy string `PM10` /
+    `PM2.5`, others as the numeric `0001` / `0002`. Discover the
+    correct values from the station-detail page (`macropath=...`
+    attribute on the "registros horarios disponibles" link) and pass
+    them through. Cuncumén-style stations where station_code happens
+    to equal macro_id and param_code is `PM10` keep working under the
+    old defaults.
     """
-    code = _PARAM_CODES.get(parameter)
-    if code is None:
-        raise ValueError(f"unsupported SINCA parameter: {parameter}")
-    macro = f"./{region_path}/{station_code}/Cal/{code}/{code}.{resolution}.{resolution}.ic"
+    effective_macro_id = macro_id or station_code
+    code: str
+    if param_code is not None:
+        code = param_code
+    else:
+        default_code = _PARAM_CODES.get(parameter)
+        if default_code is None:
+            raise ValueError(f"unsupported SINCA parameter: {parameter}")
+        code = default_code
+    macro = (
+        f"./{region_path}/{effective_macro_id}/Cal/{code}/"
+        f"{code}.{resolution}.{resolution}.ic"
+    )
     qs = urllib.parse.urlencode(
         {
             "outtype": "xcl",

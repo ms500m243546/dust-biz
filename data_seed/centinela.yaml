@@ -1,0 +1,46 @@
+# Centinela — Phase O.2 multi-mine SINCA survey seed
+#
+# Mine: Antofagasta Minerals — Minera Centinela.
+# Region / commune: Antofagasta / Sierra Gorda.
+# Sister mine to Los Pelambres under the Antofagasta Minerals
+# umbrella. Same partnership ladder we'd traverse for operator-private
+# data — Centinela is on it. Sister cluster includes Spence (BHP) and
+# Esperanza (now part of Centinela).
+#
+# Survey-only seed — captures the minimum needed to run a 12-month
+# SINCA PM10 pull at the closest viable receptor.
+#
+# Station 255 (Sierra Gorda) is the only SINCA-public hourly receptor
+# in the Centinela / Spence / Esperanza airshed.
+
+deployment_tier: dev
+
+mine:
+  mine_id: centinela
+  name: Antofagasta Minerals — Centinela
+  default_automation_level: L1
+
+# Approximate pit centroid in WGS84 lon/lat (Centinela operates the
+# former Esperanza pit + the Tesoro oxide complex). Replace with
+# surveyed value when the mine becomes a deployment target.
+mine_centroid:
+  longitude: -69.3330
+  latitude: -22.8920
+
+sensors:
+  - sensor_id: cnt-sierra-gorda
+    mine_id: centinela
+    sensor_type: pm10
+    is_compliance_station: true
+    sinca_station_code: "255"
+    sinca_macro_id: "204"
+    sinca_param_code: PM10
+    sinca_region_path: RII
+    sinca_resolution: horario
+    sinca_data_status: has_data
+    notes: Sierra Gorda town SINCA station (Servicios y Tecnología
+      Ltda). Hourly PM10+PM2.5 from 2012-09-10. Town-adjacent to the
+      Centinela / Spence / Esperanza cluster — the closest
+      SINCA-public proxy for Antofagasta Minerals' second-pilot
+      region. Empirical macropath ./RII/204/Cal/PM10 (legacy string
+      param code, not numeric — older station vintage).

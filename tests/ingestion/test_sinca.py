@@ -155,6 +155,58 @@ def test_build_url_default_region_is_rm() -> None:
     assert "/RM/D14/Cal/PM2.5/PM2.5.horario.horario.ic" in decoded
 
 
+def test_build_url_macro_id_overrides_station_code() -> None:
+    # Phase O.2 — Las Condes 239's macro identifier is "D13", not "239".
+    # The public station_id and the data-gateway macro_id are distinct
+    # for most stations; Cuncumén 424 was the lucky exception where
+    # they happened to match.
+    url = build_url(
+        station_code="239",
+        parameter="pm10",
+        window_from=datetime(2026, 5, 1, 0, 0),
+        window_to=datetime(2026, 5, 2, 0, 0),
+        region_path="RM",
+        macro_id="D13",
+    )
+    from urllib.parse import unquote
+    decoded = unquote(url)
+    assert "/RM/D13/Cal/PM10/PM10.horario.horario.ic" in decoded
+    assert "/RM/239/" not in decoded
+
+
+def test_build_url_param_code_overrides_legacy_string() -> None:
+    # Phase O.2 — Calama 207 uses the numeric parameter code "0001"
+    # in its macro path, not the legacy string "PM10". Both encodings
+    # exist in the SINCA portal in 2026.
+    url = build_url(
+        station_code="207",
+        parameter="pm10",
+        window_from=datetime(2026, 5, 1, 0, 0),
+        window_to=datetime(2026, 5, 2, 0, 0),
+        region_path="RII",
+        macro_id="233",
+        param_code="0001",
+    )
+    from urllib.parse import unquote
+    decoded = unquote(url)
+    assert "/RII/233/Cal/0001/0001.horario.horario.ic" in decoded
+    assert "PM10" not in decoded
+
+
+def test_build_url_defaults_preserve_cuncumen_compatibility() -> None:
+    # Phase O.2 — when macro_id and param_code are omitted, fall back
+    # to the L.M.1 behaviour: macro_id := station_code, param := PM10.
+    url = build_url(
+        station_code="424",
+        parameter="pm10",
+        window_from=datetime(2026, 4, 25, 0, 0),
+        window_to=datetime(2026, 5, 1, 0, 0),
+        region_path="RIV",
+    )
+    from urllib.parse import unquote
+    assert "./RIV/424/Cal/PM10/PM10.horario.horario.ic" in unquote(url)
+
+
 def test_build_url_supports_daily_resolution() -> None:
     url = build_url(
         station_code="424",

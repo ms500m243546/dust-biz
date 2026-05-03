@@ -1,9 +1,9 @@
 # DustOps AI — Session Handoff
 
 **As of:** 2026-05-03
-**Active phase:** Phase O.1 complete — equipment truck-geometry schema (AP-42 inputs landed; awaiting per-mine back-fill). Real-data on-ramp progress: (1) Open-Meteo 12mo done (17,568 records), (2) SINCA Cuncumén 12mo confirmed (8,603 records), (3) O.1 equipment-schema gap closed. Next: O.2 multi-mine SINCA survey, then real model training.
-**Last completed:** Phase O.1 — `equipment.{empty_weight_tonnes, tire_contact_area_m2, tire_count, axle_count}` (all nullable). New `scripts/migrate_equipment_truck_geometry.py` (idempotent). New `docs/training-features.md` mapping every model-input variable to its column or remaining gap. `docs/data-contracts.md` Equipment row updated.
-**Validation gate:** `npm run agent-check` GREEN, **21 PASS / 0 SKIP / 0 FAIL**. 587 backend tests (+3 schema cases) + 25 web tests.
+**Active phase:** Phase O.2 complete — multi-mine SINCA survey + connector macro_id fix. Real-data on-ramp now has **5 SINCA-public PM10 stations across 4 Chilean copper mines and 2 SINCA regions** (Los Pelambres / Los Bronces / Chuquicamata / Centinela), totaling 36,413 hourly records over 2025-05-03 → 2026-05-03. Sufficient for multi-station fairness + drift work and second-mine deployment. Next: per-mine back-fill of O.1 truck-geometry, then real model training.
+**Last completed:** Phase O.2 — three new mine seeds + corrected los_bronces. Latent SINCA connector bug fixed (station_code vs macro_id taxonomy + `PM10` vs `0001` parameter encoding). 3 new connector tests.
+**Validation gate:** `npm run agent-check` GREEN, **21 PASS / 0 SKIP / 0 FAIL**. 590 backend tests + 25 web tests.
 
 ---
 

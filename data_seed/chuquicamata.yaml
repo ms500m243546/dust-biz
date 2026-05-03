@@ -1,0 +1,72 @@
+# Chuquicamata — Phase O.2 multi-mine SINCA survey seed
+#
+# Mine: Codelco División Chuquicamata (state-owned).
+# Region / commune: Antofagasta / Calama.
+# Town-adjacent (Calama is ~15 km from the open pit). High community
+# monitoring intensity; multiple SINCA-public stations with continuous
+# hourly data.
+#
+# Survey-only seed — captures the minimum needed to run a 12-month
+# SINCA PM10 pull. Full RCA receptor lists, station threshold
+# overrides, and weather targets are deferred until Chuquicamata
+# becomes a deployment target.
+#
+# Two stations adopted from the O.2 survey (HIGH confidence):
+#   207 (Club Deportivo 23 de Marzo) — Codelco Distrito Norte; SGS Chile
+#   275 (Estación Centro Calama)     — SGS Chile; central Calama gradient
+
+deployment_tier: dev
+
+mine:
+  mine_id: chuquicamata
+  name: Codelco División Chuquicamata
+  default_automation_level: L1
+
+# Approximate pit centroid in WGS84 lon/lat (the canonical "Mina
+# Chuquicamata" open pit). Replace with surveyed value when the mine
+# becomes a deployment target.
+mine_centroid:
+  longitude: -68.9010
+  latitude: -22.2930
+
+sensors:
+  - sensor_id: chq-club-23-marzo
+    mine_id: chuquicamata
+    sensor_type: pm10
+    is_compliance_station: true
+    sinca_station_code: "207"
+    sinca_macro_id: "233"
+    sinca_param_code: "0001"
+    sinca_region_path: RII
+    sinca_resolution: horario
+    sinca_data_status: has_data
+    notes: Club Deportivo 23 de Marzo, Calama. SGS Chile-operated,
+      owner Codelco Distrito Norte. Hourly PM10+PM2.5 from
+      2012-10-25. Town-adjacent (~15 km from pit); active community
+      receptor with RCA scrutiny. Empirical macropath
+      ./RII/233/Cal/0001 (verified 2026-05-03).
+  - sensor_id: chq-calama-centro
+    mine_id: chuquicamata
+    sensor_type: pm10
+    is_compliance_station: true
+    sinca_station_code: "275"
+    sinca_macro_id: "236"
+    sinca_param_code: "0001"
+    sinca_region_path: RII
+    sinca_resolution: horario
+    sinca_data_status: has_data
+    notes: Estación Centro Calama. SGS Chile-operated. Hourly
+      PM10+PM2.5 from 2012-10-19; possible 4-month gap into 2026 —
+      verify density on first pull. Pairs with 207 to triangulate
+      the in-town gradient. Empirical macropath ./RII/236/Cal/0001.
+  - sensor_id: chq-chiu-chiu
+    mine_id: chuquicamata
+    sensor_type: pm10
+    is_compliance_station: true
+    sinca_station_code: "234"
+    sinca_region_path: RII
+    sinca_resolution: horario
+    sinca_data_status: no_published_data
+    notes: Chiu Chiu (Codelco Distrito Norte / CIMM). MMA portal page
+      shows hourly window 2008-2009 only — likely dormant. Skipped
+      by default; --include-empty to re-probe.

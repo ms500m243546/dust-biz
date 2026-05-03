@@ -180,6 +180,8 @@ def _run_one_sinca(
     no_persist: bool,
     sensor_id: str | None,
     resolution: str = "horario",
+    macro_id: str | None = None,
+    param_code: str | None = None,
 ) -> dict[str, Any]:
     """Execute one (station, parameter, window) pull. Returns a status dict.
 
@@ -187,12 +189,23 @@ def _run_one_sinca(
     YAML batch mode (`--from-yaml ...`). Per-station HTTP failures
     return a structured result rather than raising — the YAML driver
     needs to continue past individual outages.
+
+    `macro_id` / `param_code` (Phase O.2) override the SINCA macro path
+    for stations whose public station_id != macro identifier (e.g.
+    Las Condes 239 → macro_id D13). See `app.ingestion.public.sinca.
+    build_url` for the empirical taxonomy.
     """
-    cache_filters = {
+    cache_filters: dict[str, Any] = {
         "station_code": station.station_code,
         "parameter": parameter,
         "resolution": resolution,
     }
+    # Only segment the cache key when the caller passed an override —
+    # otherwise legacy cache entries (without these keys) keep matching.
+    if macro_id is not None:
+        cache_filters["macro_id"] = macro_id
+    if param_code is not None:
+        cache_filters["param_code"] = param_code
     cached = ingest_cache.get(
         source=SINCA_SOURCE,
         window_from=window_from,
@@ -219,6 +232,8 @@ def _run_one_sinca(
             window_to=window_to,
             region_path=region_path,
             resolution=resolution,
+            macro_id=macro_id,
+            param_code=param_code,
         )
         try:
             body = _http_get(url)
@@ -375,6 +390,15 @@ def cmd_sinca_from_yaml(args: argparse.Namespace) -> int:
         region_path = spec.get("sinca_region_path") or args.region_path
         resolution = spec.get("sinca_resolution") or "horario"
         sensor_type = spec.get("sensor_type", "pm10")
+        # Phase O.2 — optional per-sensor overrides for stations whose
+        # public station_id differs from the macro identifier and/or
+        # whose parameter is encoded numerically (`0001`) instead of
+        # the legacy string (`PM10`). Cuncumén-style stations omit
+        # these and fall back to station_code + PM10.
+        macro_id = spec.get("sinca_macro_id")
+        macro_id = str(macro_id) if macro_id is not None else None
+        param_code = spec.get("sinca_param_code")
+        param_code = str(param_code) if param_code is not None else None
         if sensor_type not in ("pm10", "pm25"):
             print(f"  {sensor_id}: skipped (unsupported sensor_type {sensor_type!r})")
             continue
@@ -399,6 +423,8 @@ def cmd_sinca_from_yaml(args: argparse.Namespace) -> int:
             no_persist=args.no_persist,
             sensor_id=sensor_id,
             resolution=resolution,
+            macro_id=macro_id,
+            param_code=param_code,
         )
         result["sensor_id"] = sensor_id
         result["sensor_type"] = sensor_type

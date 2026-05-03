@@ -31,11 +31,26 @@ Each entry is one of:
 
 | Feature | Source | Status |
 |---|---|---|
-| `pm10_ugm3` | `sensor_readings` for `sensor_type='pm10'` | available (1 SINCA station: Cuncumén 424) |
+| `pm10_ugm3` | `sensor_readings` for `sensor_type='pm10'` | available (5 SINCA stations across 4 mines / 2 regions, Phase O.2) |
 | `pm25_ugm3` | `sensor_readings` for `sensor_type='pm25'` | available at Cuncumén from 2020-01-01 |
 
-Multi-receptor coverage is the Phase O.2 unblock (multi-mine SINCA
-survey + SMA SEIA scrape).
+### SINCA-public PM10 stations adopted (Phase O.2)
+
+| sensor_id | mine | station code | macro_id | param code | region | density (12mo) |
+|---|---|---|---|---|---|---|
+| `lp-em05-cuncumen` | Los Pelambres | 424 | 424 | PM10 | RIV | ~98% (8,603 / 8,784) |
+| `lb-las-condes` | Los Bronces | 239 | D13 | PM10 | RM | ~79% (6,959 / 8,785) |
+| `chq-club-23-marzo` | Chuquicamata | 207 | 233 | 0001 | RII | ~99% (8,670 / 8,785) |
+| `chq-calama-centro` | Chuquicamata | 275 | 236 | 0001 | RII | ~66% (5,764 / 8,785) |
+| `cnt-sierra-gorda` | Centinela | 255 | 204 | PM10 | RII | ~80% (7,017 / 8,785) |
+
+The `macro_id` and `param_code` columns are SINCA-internal taxonomy:
+the public station code (in the URL `index.php/estacion/index/id/N`)
+is *not* the same as the macro identifier used in the data-gateway
+path. Two parameter encodings co-exist: legacy stations use the
+string `PM10`, newer stations use the numeric `0001`. Both are
+supported by `app.ingestion.public.sinca.build_url` via the
+`macro_id` + `param_code` overrides (Phase O.2).
 
 ## Haul-truck dust generation (AP-42 unpaved-haul-road)
 
