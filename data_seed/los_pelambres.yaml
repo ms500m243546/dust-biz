@@ -112,44 +112,145 @@ populated_places:
 
 # Sensors (compliance + faena monitoring stations). Each station also
 # gets a row in `station_threshold_overrides` below so the K.2 +
-# K.6 reports honor the RCA-mandated limit. SINCA station codes are
-# the values the SINCA gateway expects (see
-# scripts/seed_public_data.py).
+# K.6 reports honor the RCA-mandated limit.
+#
+# SINCA station codes + region paths verified against
+# sinca.mma.gob.cl on 2026-05-02 (see scripts/seed_public_data.py).
+# All Choapa-province stations live under SINCA region path "RIV"
+# (Coquimbo). Stations marked `sinca_station_code: null` are
+# operator-private (Antofagasta telematics) and require the
+# operator_real adapter rather than the SINCA orchestrator.
 sensors:
+  # --- SINCA-public community + regional receptors ---
+  #
+  # `sinca_data_status` field (added 2026-05-02 after empirical batch
+  # probe of the SINCA portal):
+  #
+  #   has_data            station publishes real PM10 readings via
+  #                       SINCA's tsindico2.cgi gateway
+  #   no_published_data   station is registered with SINCA and has the
+  #                       macropath schema, but the data files are
+  #                       empty across multi-year windows (likely a
+  #                       paper-compliance station whose data flows
+  #                       through SMA/SEIA filings or operator audits
+  #                       rather than the public portal)
+  #
+  # Status determined by hitting `outtype=xcl` for each station with
+  # a 1+ year window and counting non-empty value rows.
+  #
+  # `sinca_resolution`: "horario" (hourly, EMRPM-grade) or "diario"
+  # (24-hr filter sampler). Cuncumén is the only Choapa station with
+  # hourly data.
   - sensor_id: lp-em05-cuncumen
     mine_id: los-pelambres
     sensor_type: pm10
     is_compliance_station: true
-    sinca_station_code: TODO_FROM_RCA  # verify against sinca.mma.gob.cl
-    notes: Cuncumén community monitoring station (regulator-grade).
+    sinca_station_code: "424"
+    sinca_region_path: RIV
+    sinca_resolution: horario
+    sinca_data_status: has_data
+    notes: Cuncumén community monitoring station (regulator-grade
+      EMRPM). Salamanca commune. Verified 2026-05-02; PM10 from
+      2012-04-01, PM2.5 from 2020-01-01. Only Choapa-province
+      station with hourly resolution.
   - sensor_id: lp-caimanes
     mine_id: los-pelambres
     sensor_type: pm10
     is_compliance_station: true
-    sinca_station_code: TODO_FROM_RCA
+    sinca_station_code: "407"
+    sinca_region_path: RIV
+    sinca_resolution: diario
+    sinca_data_status: no_published_data
     notes: Caimanes community PM monitoring per RCA receptor list.
-  - sensor_id: lp-salamanca
+      Los Vilos commune; downstream of El Mauro tailings. SINCA
+      registry has the schema but values are empty over 5+ year
+      windows — actual readings likely flow through SMA SEIA reports
+      rather than the public portal.
+  - sensor_id: lp-coiron
     mine_id: los-pelambres
     sensor_type: pm10
     is_compliance_station: true
-    sinca_station_code: TODO_FROM_RCA
-    notes: Salamanca regional reference.
-  - sensor_id: lp-el-mauro-faena
+    sinca_station_code: "404"
+    sinca_region_path: RIV
+    sinca_resolution: diario
+    sinca_data_status: no_published_data
+    notes: Coirón community receptor (Salamanca commune). Maps to
+      the lp-coiron populated place. Same empty-archive pattern as
+      Caimanes.
+  - sensor_id: lp-camisas
     mine_id: los-pelambres
     sensor_type: pm10
-    is_compliance_station: false
-    notes: Faena monitoring near El Mauro tailings dam.
+    is_compliance_station: true
+    sinca_station_code: "405"
+    sinca_region_path: RIV
+    sinca_resolution: diario
+    sinca_data_status: no_published_data
+    notes: Camisas community receptor (Salamanca commune). Empty
+      SINCA archive; awaiting alternate source.
+  - sensor_id: lp-hotel-mina
+    mine_id: los-pelambres
+    sensor_type: pm10
+    is_compliance_station: true
+    sinca_station_code: "401"
+    sinca_region_path: RIV
+    sinca_resolution: diario
+    sinca_data_status: no_published_data
+    notes: Hotel Mina station (Salamanca commune). Empty SINCA archive.
+  - sensor_id: lp-quelen-alto
+    mine_id: los-pelambres
+    sensor_type: pm10
+    is_compliance_station: true
+    sinca_station_code: "409"
+    sinca_region_path: RIV
+    sinca_resolution: diario
+    sinca_data_status: no_published_data
+    notes: Quelen Alto station (Salamanca commune). Empty SINCA archive.
+  - sensor_id: lp-chacay
+    mine_id: los-pelambres
+    sensor_type: pm10
+    is_compliance_station: true
+    sinca_station_code: "402"
+    sinca_region_path: RIV
+    sinca_resolution: diario
+    sinca_data_status: no_published_data
+    notes: Chacay station (Los Vilos commune). Empty SINCA archive.
+  - sensor_id: lp-punta-chungo
+    mine_id: los-pelambres
+    sensor_type: pm10
+    is_compliance_station: true
+    sinca_station_code: "408"
+    sinca_region_path: RIV
+    sinca_resolution: diario
+    sinca_data_status: no_published_data
+    notes: Punta Chungo station (Los Vilos commune). Empty SINCA archive.
+  - sensor_id: lp-el-mauro
+    mine_id: los-pelambres
+    sensor_type: pm10
+    is_compliance_station: true
+    sinca_station_code: "406"
+    sinca_region_path: RIV
+    sinca_resolution: diario
+    sinca_data_status: no_published_data
+    notes: El Mauro station (Los Vilos commune). Co-located with the
+      El Mauro tailings dam. Empty SINCA archive — operator-direct
+      monitoring data likely available via Antofagasta partnership
+      and/or SMA filings rather than the public portal.
+  # --- Operator-private faena stations (Antofagasta partnership) ---
   - sensor_id: lp-pit-active
     mine_id: los-pelambres
     sensor_type: pm10
     is_compliance_station: false
-    notes: Active-pit faena station.
+    sinca_station_code: null
+    notes: Active-pit faena station. Operator-private; no SINCA
+      equivalent — depends on Antofagasta telematics feed
+      (operator_real adapter).
   - sensor_id: lp-piuquenes
     mine_id: los-pelambres
     sensor_type: pm10
     is_compliance_station: false
-    sinca_station_code: TODO_FROM_RCA
-    notes: Piuquenes faena reference.
+    sinca_station_code: null
+    notes: Piuquenes faena reference. Verified 2026-05-02 as
+      NOT in SINCA; operator-private.
 
 # Per-station threshold overrides. Los Pelambres RCAs reference the
 # D.S. 12/2011 primary norms at receptor stations rather than imposing
@@ -173,10 +274,52 @@ station_threshold_overrides:
     pm25_breach_ugm3: 50.0
     rca_reference: RCA 050/2004 amendment — El Mauro / Caimanes consent
     source_url: https://sea.gob.cl/  # TODO_FROM_RCA
-  - sensor_id: lp-salamanca
+  - sensor_id: lp-coiron
     pm10_warning_ugm3: 100.0
     pm10_breach_ugm3: 150.0
     pm25_warning_ugm3: 25.0
     pm25_breach_ugm3: 50.0
-    rca_reference: RCA 38/1997 — Salamanca comuna receptor
+    rca_reference: RCA 38/1997 — Coirón Choapa-valley receptor
+    source_url: https://sea.gob.cl/  # TODO_FROM_RCA
+  - sensor_id: lp-camisas
+    pm10_warning_ugm3: 100.0
+    pm10_breach_ugm3: 150.0
+    pm25_warning_ugm3: 25.0
+    pm25_breach_ugm3: 50.0
+    rca_reference: RCA 38/1997 — Camisas community receptor
+    source_url: https://sea.gob.cl/  # TODO_FROM_RCA
+  - sensor_id: lp-hotel-mina
+    pm10_warning_ugm3: 100.0
+    pm10_breach_ugm3: 150.0
+    pm25_warning_ugm3: 25.0
+    pm25_breach_ugm3: 50.0
+    rca_reference: RCA 38/1997 — Hotel Mina receptor
+    source_url: https://sea.gob.cl/  # TODO_FROM_RCA
+  - sensor_id: lp-quelen-alto
+    pm10_warning_ugm3: 100.0
+    pm10_breach_ugm3: 150.0
+    pm25_warning_ugm3: 25.0
+    pm25_breach_ugm3: 50.0
+    rca_reference: RCA 38/1997 — Quelen Alto receptor
+    source_url: https://sea.gob.cl/  # TODO_FROM_RCA
+  - sensor_id: lp-chacay
+    pm10_warning_ugm3: 100.0
+    pm10_breach_ugm3: 150.0
+    pm25_warning_ugm3: 25.0
+    pm25_breach_ugm3: 50.0
+    rca_reference: RCA 050/2004 — Chacay / Los Vilos receptor
+    source_url: https://sea.gob.cl/  # TODO_FROM_RCA
+  - sensor_id: lp-punta-chungo
+    pm10_warning_ugm3: 100.0
+    pm10_breach_ugm3: 150.0
+    pm25_warning_ugm3: 25.0
+    pm25_breach_ugm3: 50.0
+    rca_reference: RCA 050/2004 — Punta Chungo / Los Vilos coastal receptor
+    source_url: https://sea.gob.cl/  # TODO_FROM_RCA
+  - sensor_id: lp-el-mauro
+    pm10_warning_ugm3: 100.0
+    pm10_breach_ugm3: 150.0
+    pm25_warning_ugm3: 25.0
+    pm25_breach_ugm3: 50.0
+    rca_reference: RCA 050/2004 amendment — El Mauro tailings consent
     source_url: https://sea.gob.cl/  # TODO_FROM_RCA

@@ -69,40 +69,68 @@ def quality_hint_for_tier(tier: str) -> float:
 
 
 def parse_sinca_csv(payload: str, *, station_code: str, parameter: str) -> list[Mapping[str, Any]]:
-    """Parse a SINCA CSV export into raw_value dicts.
+    """Parse a SINCA `tsindico2.cgi?outtype=xcl` export into raw_value dicts.
 
-    SINCA's CSV format (simplified for the fields we use):
-        FECHA (YYYY-MM-DD HH:MM); VALOR; VALIDADO
+    The real SINCA hourly + daily export schema (verified empirically
+    against Cuncumén station 424 across a 12-month window in May 2026)
+    is six semicolon-separated columns with only the first two labeled
+    in the header row:
 
-    Rows with non-numeric VALOR (header / NA / "S/I" sin información)
-    are dropped silently. Validated-only filtering is the caller's job;
-    we surface every row with the `validated` flag preserved.
+        FECHA (YYMMDD);HORA (HHMM);
+        260425;0100;;24;;            <- recent: validated value at col 3
+        260425;0400;;;0;             <- raw fallback at col 4
+        250521;2000;23;;;            <- older: pre-validated value at col 2
+
+    Column semantics (inferred from QA-pipeline behavior):
+
+        col 0  FECHA  YYMMDD
+        col 1  HORA   HHMM (0000 for daily-resolution exports)
+        col 2  pre-validated value — the operator's reading before
+               SMA/MMA QA. Populated for the most-recent ~year of
+               history; cleared once a row is promoted to col 3.
+        col 3  validated value — the regulator-blessed number. Lags
+               col 2 by ~1 week while QA runs.
+        col 4  raw/non-validated fallback — surfaces when neither
+               col 2 nor col 3 carries a value (typical of indicative
+               networks or rejected QA).
+        col 5  trailing empty padding from the gateway
+
+    Value priority: col 3 (validated) → col 2 (pre-validated) → col 4
+    (raw). The `validated` flag is True only when the value sourced
+    from col 3.
     """
     out: list[Mapping[str, Any]] = []
-    reader = csv.DictReader(io.StringIO(payload), delimiter=";")
-    column_value = _detect_value_column(list(reader.fieldnames or []), parameter)
-    if column_value is None:
+    reader = csv.reader(io.StringIO(payload), delimiter=";")
+    rows = list(reader)
+    if not rows:
         return out
-    for row in reader:
-        ts_raw = (row.get("FECHA") or row.get("fecha") or "").strip()
-        if not ts_raw:
+    # First row is header; skip it.
+    for row in rows[1:]:
+        if len(row) < 5:
+            continue
+        date_yymmdd = row[0].strip()
+        time_hhmm = row[1].strip()
+        if not date_yymmdd or not time_hhmm:
             continue
         try:
-            ts = datetime.strptime(ts_raw, "%Y-%m-%d %H:%M")
+            ts = datetime.strptime(f"{date_yymmdd} {time_hhmm.zfill(4)}", "%y%m%d %H%M")
         except ValueError:
-            try:
-                ts = datetime.fromisoformat(ts_raw)
-            except ValueError:
-                continue
-        value_raw = (row.get(column_value) or "").replace(",", ".").strip()
-        if value_raw in ("", "S/I", "NA", "n/a"):
+            continue
+        prelim_raw = row[2].strip().replace(",", ".") if len(row) > 2 else ""
+        validated_raw = row[3].strip().replace(",", ".") if len(row) > 3 else ""
+        fallback_raw = row[4].strip().replace(",", ".") if len(row) > 4 else ""
+        if validated_raw not in ("", "S/I", "NA", "n/a"):
+            value_str, validated = validated_raw, True
+        elif prelim_raw not in ("", "S/I", "NA", "n/a"):
+            value_str, validated = prelim_raw, False
+        elif fallback_raw not in ("", "S/I", "NA", "n/a"):
+            value_str, validated = fallback_raw, False
+        else:
             continue
         try:
-            value = float(value_raw)
+            value = float(value_str)
         except ValueError:
             continue
-        validated_field = (row.get("VALIDADO") or row.get("validado") or "").strip().lower()
-        validated = validated_field in {"1", "true", "si", "sí", "v"}
         out.append(
             {
                 "station_code": station_code,
@@ -113,18 +141,6 @@ def parse_sinca_csv(payload: str, *, station_code: str, parameter: str) -> list[
             }
         )
     return out
-
-
-def _detect_value_column(fieldnames: list[str], parameter: str) -> str | None:
-    target = parameter.upper()
-    for name in fieldnames:
-        if name.upper().startswith("VALOR") or name.upper() == target:
-            return name
-    # Some exports use the parameter code directly as the column.
-    code = _PARAM_CODES.get(parameter)
-    if code and code in fieldnames:
-        return code
-    return None
 
 
 def to_raw_sensor_payload(
@@ -159,23 +175,31 @@ def build_url(
     parameter: str,
     window_from: datetime,
     window_to: datetime,
+    region_path: str = "RM",
+    resolution: str = "horario",
 ) -> str:
-    """Build the SINCA CSV download URL for one (station, parameter, window).
+    """Build the SINCA `tsindico2.cgi` Excel-export URL.
 
-    SINCA uses a query-string format with date keys `from` / `to` in
-    YYYYMMDD and a parameter code; this function captures the gateway
-    pattern in one place so the live-fetch path is testable in
-    isolation (the parser doesn't care how the URL is built).
+    Verified empirically against the live portal (Cuncumén station 424
+    in Coquimbo / RIV) on 2026-05-02. The macro structure is:
+
+        ./<region_path>/<station_code>/Cal/<PARAM>/<PARAM>.<res>.<res>.ic
+
+    Date format is YYMMDDHH — `from` is anchored to hour 00, `to` to
+    hour 23 of each calendar day. `region_path` follows SINCA's
+    internal taxonomy (RM, RIV, RV, ...); `resolution` is one of
+    "horario" (hourly) or "diario" (daily).
     """
     code = _PARAM_CODES.get(parameter)
     if code is None:
         raise ValueError(f"unsupported SINCA parameter: {parameter}")
+    macro = f"./{region_path}/{station_code}/Cal/{code}/{code}.{resolution}.{resolution}.ic"
     qs = urllib.parse.urlencode(
         {
-            "outtype": "xcl",  # CSV-style export
-            "macro": "./RM/" + station_code + "/Cal/" + code,
-            "from": window_from.strftime("%Y%m%d"),
-            "to": window_to.strftime("%Y%m%d"),
+            "outtype": "xcl",
+            "macro": macro,
+            "from": window_from.strftime("%y%m%d") + "00",
+            "to": window_to.strftime("%y%m%d") + "23",
         }
     )
     return f"{_BASE}?{qs}"

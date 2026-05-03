@@ -36,6 +36,9 @@ import urllib.error
 import urllib.request
 from datetime import datetime
 from pathlib import Path
+from typing import Any
+
+import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -106,6 +109,108 @@ def _persist_sinca(
     return written
 
 
+def _run_one_sinca(
+    *,
+    station: SincaStation,
+    parameter: str,
+    region_path: str,
+    window_from: datetime,
+    window_to: datetime,
+    cache_dir: Path,
+    dry_run: bool,
+    no_persist: bool,
+    sensor_id: str | None,
+    resolution: str = "horario",
+) -> dict[str, Any]:
+    """Execute one (station, parameter, window) pull. Returns a status dict.
+
+    Used both by the single-station CLI mode (`--station ...`) and the
+    YAML batch mode (`--from-yaml ...`). Per-station HTTP failures
+    return a structured result rather than raising — the YAML driver
+    needs to continue past individual outages.
+    """
+    cache_filters = {
+        "station_code": station.station_code,
+        "parameter": parameter,
+        "resolution": resolution,
+    }
+    cached = ingest_cache.get(
+        source=SINCA_SOURCE,
+        window_from=window_from,
+        window_to=window_to,
+        filters=cache_filters,
+        cache_dir=cache_dir,
+    )
+
+    if cached is not None:
+        body = str(cached.get("csv", ""))
+        source_tag = "cache"
+    elif dry_run:
+        return {
+            "station_code": station.station_code,
+            "status": "dry-run-no-cache",
+            "records": 0,
+            "written": 0,
+        }
+    else:
+        url = build_url(
+            station_code=station.station_code,
+            parameter=parameter,
+            window_from=window_from,
+            window_to=window_to,
+            region_path=region_path,
+            resolution=resolution,
+        )
+        try:
+            body = _http_get(url)
+        except urllib.error.URLError as exc:
+            return {
+                "station_code": station.station_code,
+                "status": "http-error",
+                "error": str(exc),
+                "records": 0,
+                "written": 0,
+            }
+        ingest_cache.put(
+            payload={"csv": body, "url": url},
+            source=SINCA_SOURCE,
+            window_from=window_from,
+            window_to=window_to,
+            filters=cache_filters,
+            cache_dir=cache_dir,
+        )
+        source_tag = "live"
+
+    conn = SincaConnector(cache_dir=cache_dir)
+    parsed = list(
+        conn.fetch_from_payload(
+            station=station, parameter=parameter, payload=body
+        )
+    )
+    if no_persist or not sensor_id:
+        return {
+            "station_code": station.station_code,
+            "status": f"{source_tag}-parsed",
+            "records": len(parsed),
+            "written": 0,
+            "bytes": len(body),
+        }
+    written = _persist_sinca(
+        station=station,
+        parameter=parameter,
+        csv_body=body,
+        sensor_id=sensor_id,
+    )
+    return {
+        "station_code": station.station_code,
+        "status": f"{source_tag}-persisted",
+        "records": len(parsed),
+        "written": written,
+        "bytes": len(body),
+        "sensor_id": sensor_id,
+    }
+
+
 def cmd_sinca(args: argparse.Namespace) -> int:
     cache_dir = Path(args.cache_dir)
     station = SincaStation(
@@ -120,69 +225,146 @@ def cmd_sinca(args: argparse.Namespace) -> int:
     )
     window_from = _parse_date(args.window_from)
     window_to = _parse_date(args.window_to)
-    cache_filters = {"station_code": args.station, "parameter": args.parameter}
-
-    cached = ingest_cache.get(
-        source=SINCA_SOURCE,
-        window_from=window_from,
-        window_to=window_to,
-        filters=cache_filters,
-        cache_dir=cache_dir,
-    )
-
-    if cached is not None:
-        body = str(cached.get("csv", ""))
-        print(f"cache hit: {len(body)} chars from {cache_dir}")
-    elif args.dry_run:
-        print("dry-run: no cache entry and live fetch disabled; exiting 0")
-        return 0
-    else:
-        url = build_url(
-            station_code=args.station,
-            parameter=args.parameter,
-            window_from=window_from,
-            window_to=window_to,
-        )
-        print(f"fetching: {url}")
-        try:
-            body = _http_get(url)
-        except urllib.error.URLError as exc:
-            print(f"http error: {exc}", file=sys.stderr)
-            return 2
-        ingest_cache.put(
-            payload={"csv": body, "url": url},
-            source=SINCA_SOURCE,
-            window_from=window_from,
-            window_to=window_to,
-            filters=cache_filters,
-            cache_dir=cache_dir,
-        )
-        print(f"cached {len(body)} chars to {cache_dir}")
-
-    if args.no_persist:
-        # Parse only, count rows, don't write to DB. Useful for the
-        # very-first live pull when the user wants to verify the URL
-        # pattern without polluting the dev DB.
-        conn = SincaConnector(cache_dir=cache_dir)
-        rows = list(
-            conn.fetch_from_payload(
-                station=station, parameter=args.parameter, payload=body
-            )
-        )
-        print(f"parsed {len(rows)} records (no-persist mode)")
-        return 0
-
-    if not args.sensor_id:
-        print("--sensor-id required when persisting", file=sys.stderr)
-        return 2
-    written = _persist_sinca(
+    result = _run_one_sinca(
         station=station,
         parameter=args.parameter,
-        csv_body=body,
+        region_path=args.region_path,
+        window_from=window_from,
+        window_to=window_to,
+        cache_dir=cache_dir,
+        dry_run=args.dry_run,
+        no_persist=args.no_persist,
         sensor_id=args.sensor_id,
+        resolution=args.resolution,
     )
-    print(f"wrote {written} SensorReading rows for sensor_id={args.sensor_id}")
+    status = result["status"]
+    if status == "dry-run-no-cache":
+        print("dry-run: no cache entry and live fetch disabled; exiting 0")
+        return 0
+    if status == "http-error":
+        print(f"http error: {result['error']}", file=sys.stderr)
+        return 2
+    if status.endswith("-parsed"):
+        if status.startswith("cache"):
+            print(f"cache hit: {result['bytes']} chars from {cache_dir}")
+        else:
+            print(f"cached {result['bytes']} chars to {cache_dir}")
+        print(f"parsed {result['records']} records (no-persist mode)")
+        return 0
+    if status.endswith("-persisted"):
+        if status.startswith("live"):
+            print(f"cached {result['bytes']} chars to {cache_dir}")
+        print(
+            f"wrote {result['written']} SensorReading rows for "
+            f"sensor_id={result['sensor_id']}"
+        )
+        return 0
+    if not args.sensor_id and not args.no_persist:
+        print("--sensor-id required when persisting", file=sys.stderr)
+        return 2
     return 0
+
+
+def cmd_sinca_from_yaml(args: argparse.Namespace) -> int:
+    """Drive a SINCA batch pull from an RCA-seed YAML file.
+
+    Reads the `sensors:` list from the YAML. For each sensor with
+    a non-null `sinca_station_code`, fans out one HTTP request and
+    accumulates a per-station summary. Continues past individual
+    failures so partial outages don't block the whole batch.
+    """
+    cache_dir = Path(args.cache_dir)
+    window_from = _parse_date(args.window_from)
+    window_to = _parse_date(args.window_to)
+    yaml_path = Path(args.from_yaml)
+    doc = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
+    sensors = doc.get("sensors") or []
+
+    def _eligible(s: dict[str, Any]) -> bool:
+        if not s.get("sinca_station_code"):
+            return False
+        # Allow override; default to skipping known-empty stations.
+        status = s.get("sinca_data_status", "has_data")
+        if status == "no_published_data" and not args.include_empty:
+            return False
+        return True
+
+    eligible = [s for s in sensors if _eligible(s)]
+    print(
+        f"yaml: {len(sensors)} sensor(s), {len(eligible)} eligible for SINCA pull"
+    )
+    skipped_private = [s for s in sensors if not s.get("sinca_station_code")]
+    if skipped_private:
+        print(
+            "  skipping operator-private (no sinca_station_code): "
+            + ", ".join(s["sensor_id"] for s in skipped_private)
+        )
+    skipped_empty = [
+        s for s in sensors
+        if s.get("sinca_station_code")
+        and s.get("sinca_data_status") == "no_published_data"
+        and not args.include_empty
+    ]
+    if skipped_empty:
+        print(
+            "  skipping no_published_data (use --include-empty to override): "
+            + ", ".join(s["sensor_id"] for s in skipped_empty)
+        )
+
+    results: list[dict[str, Any]] = []
+    for spec in eligible:
+        sensor_id = spec["sensor_id"]
+        sinca_code = str(spec["sinca_station_code"])
+        region_path = spec.get("sinca_region_path") or args.region_path
+        resolution = spec.get("sinca_resolution") or "horario"
+        sensor_type = spec.get("sensor_type", "pm10")
+        if sensor_type not in ("pm10", "pm25"):
+            print(f"  {sensor_id}: skipped (unsupported sensor_type {sensor_type!r})")
+            continue
+        station = SincaStation(
+            station_code=sinca_code,
+            station_name=sensor_id,
+            region=region_path,
+            commune="",
+            longitude=0.0,
+            latitude=0.0,
+            tier=args.tier,
+            parameters=(sensor_type,),
+        )
+        result = _run_one_sinca(
+            station=station,
+            parameter=sensor_type,
+            region_path=region_path,
+            window_from=window_from,
+            window_to=window_to,
+            cache_dir=cache_dir,
+            dry_run=args.dry_run,
+            no_persist=args.no_persist,
+            sensor_id=sensor_id,
+            resolution=resolution,
+        )
+        result["sensor_id"] = sensor_id
+        result["sensor_type"] = sensor_type
+        result["resolution"] = resolution
+        results.append(result)
+        print(
+            f"  {sensor_id} (code={sinca_code} {region_path} "
+            f"{sensor_type}/{resolution}): {result['status']} "
+            f"records={result['records']} written={result['written']}"
+        )
+
+    ok = sum(
+        1 for r in results
+        if r["status"].endswith("-parsed") or r["status"].endswith("-persisted")
+    )
+    failed = len(results) - ok
+    total_records = sum(r["records"] for r in results)
+    total_written = sum(r["written"] for r in results)
+    print(
+        f"batch summary: {ok}/{len(results)} OK, {failed} failed; "
+        f"records={total_records} written={total_written}"
+    )
+    return 0 if failed == 0 else 1
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -196,6 +378,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--latitude", type=float, default=None)
     parser.add_argument(
         "--tier", default="EMRPM", choices=["EMRPM", "indicative"]
+    )
+    parser.add_argument(
+        "--region-path",
+        default="RM",
+        help="SINCA macropath region segment (RM, RIV, RV, ...)",
     )
     parser.add_argument(
         "--parameter", default="pm10", choices=["pm10", "pm25"]
@@ -217,14 +404,43 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Parse only; do not write to the database",
     )
+    parser.add_argument(
+        "--from-yaml",
+        dest="from_yaml",
+        default=None,
+        help=(
+            "Drive a batch pull from an RCA-seed YAML file. Iterates "
+            "every sensor with a non-null sinca_station_code; uses "
+            "each sensor's sinca_region_path (falls back to "
+            "--region-path)."
+        ),
+    )
+    parser.add_argument(
+        "--include-empty",
+        action="store_true",
+        help=(
+            "When using --from-yaml, also pull sensors flagged "
+            "sinca_data_status=no_published_data. Default: skip them, "
+            "since they return all-empty CSVs."
+        ),
+    )
+    parser.add_argument(
+        "--resolution",
+        default="horario",
+        choices=["horario", "diario"],
+        help="SINCA macro resolution for single-station mode; "
+        "ignored under --from-yaml (per-sensor sinca_resolution wins).",
+    )
 
     args = parser.parse_args(argv)
 
     if args.source == "sinca":
-        if not args.station:
-            parser.error("--station is required for --source sinca")
         if not args.window_from or not args.window_to:
             parser.error("--from and --to are required for --source sinca")
+        if args.from_yaml:
+            return cmd_sinca_from_yaml(args)
+        if not args.station:
+            parser.error("--station or --from-yaml is required for --source sinca")
         return cmd_sinca(args)
     parser.error(f"unsupported source: {args.source}")
     return 2  # unreachable; satisfies type checker
