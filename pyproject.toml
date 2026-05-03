@@ -13,6 +13,12 @@ dependencies = [
     "pydantic>=2.6",
     "pydantic-settings>=2.2",
     "sqlalchemy>=2.0",
+    # Phase P — first ML deps. scikit-learn brings sklearn + scipy.
+    # joblib is used to persist trained model artifacts on the
+    # filesystem under data_models/. numpy is the array backbone.
+    "numpy>=1.26",
+    "scikit-learn>=1.4",
+    "joblib>=1.3",
 ]
 
 [project.optional-dependencies]
@@ -61,6 +67,12 @@ files = ["app", "tests"]
 [[tool.mypy.overrides]]
 module = "tests.*"
 disallow_untyped_defs = false
+
+# Phase P — sklearn does not ship a py.typed marker; suppress the
+# missing-stubs warning. numpy + joblib do ship stubs.
+[[tool.mypy.overrides]]
+module = ["sklearn.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

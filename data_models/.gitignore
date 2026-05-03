@@ -1,0 +1,6 @@
+# Phase P — Trained model artifacts live here. They are reproducible
+# from training data + protocol_hash + model code, so we don't track
+# the binary blobs in git. Track this dir's existence and the rules.
+*
+!.gitkeep
+!.gitignore

@@ -1,9 +1,9 @@
 # DustOps AI — Session Handoff
 
 **As of:** 2026-05-03
-**Active phase:** Phase O.2 complete — multi-mine SINCA survey + connector macro_id fix. Real-data on-ramp now has **5 SINCA-public PM10 stations across 4 Chilean copper mines and 2 SINCA regions** (Los Pelambres / Los Bronces / Chuquicamata / Centinela), totaling 36,413 hourly records over 2025-05-03 → 2026-05-03. Sufficient for multi-station fairness + drift work and second-mine deployment. Next: per-mine back-fill of O.1 truck-geometry, then real model training.
-**Last completed:** Phase O.2 — three new mine seeds + corrected los_bronces. Latent SINCA connector bug fixed (station_code vs macro_id taxonomy + `PM10` vs `0001` parameter encoding). 3 new connector tests.
-**Validation gate:** `npm run agent-check` GREEN, **21 PASS / 0 SKIP / 0 FAIL**. 590 backend tests + 25 web tests.
+**Active phase:** Phase P.1 complete — first trained-forecast scaffold landed (skeleton only; fit lands in P.2). Autonomous P→Q→R→S batch run in progress per approved plan.
+**Last completed:** P.1 — `GBMForecaster` skeleton implementing the `DustForecastModel` Protocol; canonical M.4 `EvaluationProtocol` declared in `app.training.dust_forecast_training.build_p1_protocol`; first ML deps (numpy, scikit-learn, joblib) added; `data_models/` artifact dir with .gitignore for blobs; `docs/forecast-model-protocol.md` is the binding contract for trained forecast models.
+**Validation gate:** `npm run agent-check` GREEN, **21 PASS / 0 SKIP / 0 FAIL**. Backend tests grew with skeleton suite.
 
 ---
 
