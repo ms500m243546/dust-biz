@@ -3,9 +3,10 @@ import { CalibrationBadge } from '../components/CalibrationBadge';
 import { Card } from '../components/Card';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { EvidenceChip } from '../components/EvidenceChip';
+import { MultiStationCaveats } from '../components/MultiStationCaveats';
 import { PerReceptorTable } from '../components/PerReceptorTable';
 import { useApi } from '../hooks/useApi';
-import type { PerReceptorEntry } from '../api/types';
+import type { CrossMineEvalBlock, PerReceptorEntry } from '../api/types';
 import { api } from '../api/client';
 import { complianceKpis } from '../api/kpi';
 import { SensorHealthStrip } from './SensorHealthStrip';
@@ -41,6 +42,18 @@ export function Compliance() {
       | Record<string, PerReceptorEntry>
       | null
       | undefined) ?? null;
+  const survivorCaveat = (latestMetric?.metric_payload?.survivor_caveat as
+    | string
+    | null
+    | undefined) ?? null;
+  const selectionCaveat = (latestMetric?.metric_payload?.selection_caveat as
+    | string
+    | null
+    | undefined) ?? null;
+  const crossMineEval = (latestMetric?.metric_payload?.cross_mine_eval as
+    | CrossMineEvalBlock
+    | null
+    | undefined) ?? null;
 
   return (
     <div className="view-grid">
@@ -168,6 +181,11 @@ export function Compliance() {
               : 'No evaluations yet'
           }
         >
+          <MultiStationCaveats
+            survivorCaveat={survivorCaveat}
+            selectionCaveat={selectionCaveat}
+            crossMineEval={crossMineEval}
+          />
           <PerReceptorTable perReceptor={perReceptor} />
           <p className="muted">
             Per-station split of headline metrics. An aggregate-good

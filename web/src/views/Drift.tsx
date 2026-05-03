@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card } from '../components/Card';
 import { ErrorBoundary } from '../components/ErrorBoundary';
+import { MultiStationCaveats } from '../components/MultiStationCaveats';
 import { useApi } from '../hooks/useApi';
 import { api } from '../api/client';
-import type { DriftAlertSchema } from '../api/types';
+import type { CrossMineEvalBlock, DriftAlertSchema } from '../api/types';
 
 const SINCE_OPTIONS = [14, 30, 90] as const;
 type SinceDays = (typeof SINCE_OPTIONS)[number];
@@ -61,6 +62,26 @@ export function Drift() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelVersion, sinceDays]);
   const alerts = drift.data ?? [];
+  // Phase T.2 — surface the latest metric_payload's Q.3 caveats here
+  // too. Drift watch is the model-trust surface; the caveats belong
+  // alongside the trend-decay alerts.
+  const latestPayload = useMemo(() => {
+    if (!performance.data || !modelVersion) return null;
+    const match = performance.data.find((r) => r.model_version === modelVersion);
+    return match?.metric_payload ?? null;
+  }, [performance.data, modelVersion]);
+  const survivorCaveat = (latestPayload?.survivor_caveat as
+    | string
+    | null
+    | undefined) ?? null;
+  const selectionCaveat = (latestPayload?.selection_caveat as
+    | string
+    | null
+    | undefined) ?? null;
+  const crossMineEval = (latestPayload?.cross_mine_eval as
+    | CrossMineEvalBlock
+    | null
+    | undefined) ?? null;
   const worstSeverity: 'green' | 'yellow' | 'red' = alerts.length === 0
     ? 'green'
     : alerts.some((a) => driftSeverity(a.delta, a.threshold) === 'red')
@@ -104,6 +125,12 @@ export function Drift() {
             </label>
             {drift.refreshing && <span className="muted">refreshing…</span>}
           </div>
+
+          <MultiStationCaveats
+            survivorCaveat={survivorCaveat}
+            selectionCaveat={selectionCaveat}
+            crossMineEval={crossMineEval}
+          />
 
           {drift.error ? (
             <div className="error-row">{drift.error.message}</div>

@@ -109,6 +109,8 @@ code { font-family: 'SF Mono', Menlo, monospace; font-size: 0.9em; background: r
 .sensor-strip { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
 .sensor-tile { width: 14px; height: 14px; border-radius: 3px; display: inline-block; }
 
+.caveat-stack { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+
 .per-receptor-table { width: 100%; }
 .per-receptor-row td { border-left: 3px solid transparent; }
 .per-receptor-row.per-receptor-grey td:first-child { border-left-color: var(--grey); }
