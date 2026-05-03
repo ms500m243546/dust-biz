@@ -46,6 +46,7 @@ AUTH_GATED_ENDPOINTS = [
     ("/api/v1/action-outcomes", 401),
     ("/api/v1/training-data", 401),
     ("/api/v1/model-performance", 401),
+    ("/api/v1/drift?model_version=foo", 401),
     ("/api/v1/reports/model-performance", 401),
     ("/api/v1/reports/roi", 401),
     ("/api/v1/reports/compliance", 401),

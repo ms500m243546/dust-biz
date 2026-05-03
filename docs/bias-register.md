@@ -4,7 +4,7 @@ The full bias / integrity-hazard surface for DustOps, ranked by current exposure
 
 This is a living document. New biases are appended; mitigated biases stay listed (with their mitigation phase) so the audit trail is complete. Every architect-protocol planning response (per `docs/architect_protocol.md` §3) must scan this register and call out which entries the proposed change touches.
 
-Last reviewed: **2026-05-03 (Phase M.4.2)**.
+Last reviewed: **2026-05-03 (Phase M.4.3)**.
 
 ---
 
@@ -41,7 +41,7 @@ Last reviewed: **2026-05-03 (Phase M.4.2)**.
 
 | # | Family | Bias | Exposure today | Mitigation phase | Status | Notes |
 |---|---|---|---|---|---|---|
-| B-12 | Operational | Concept drift / regime change over 14 yrs (mine expansions, fleet changes, RCA amendments) | High | M.4 | Deferred | Most-recent-N-years training option + drift watch in production. |
+| B-12 | Operational | Concept drift / regime change over 14 yrs (mine expansions, fleet changes, RCA amendments) | High | M.4.3 | **Mitigated (M.4.3)** | `app/domain/drift_watch.py:compute_drift` splits persisted `model_performance_metrics` rows for a model_version into baseline (oldest half) + recent (newest half) and emits one `DriftAlert` per metric whose median crosses the per-metric threshold in `DRIFT_THRESHOLDS`. Surfaced via `GET /api/v1/drift?model_version=&since_days=`. Detection only — most-recent-N-years training and operational alerting are post-M / operator-side. |
 | B-13 | Operational | Calibration drift — sensors drift over years; old data has different calibration than new data | Medium | M.2 (PIT can carry calibration version) | Open | SINCA QC handles some but not all. |
 | B-14 | Operational | Distribution shift — Los Pelambres → Los Bronces deployment will see different distributions | Medium | M.4 | Deferred | Block geographic-generalization claims until cross-validated. |
 | B-15 | Operational | Time-zone drift — Chile DST policy has changed; legacy SINCA timestamps may be ambiguous | Medium | L.M.1 | Mitigated | Pinned `timezone=UTC` everywhere. Document Chile DST transitions as data-quality risk. |

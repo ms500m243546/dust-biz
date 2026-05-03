@@ -25,6 +25,7 @@ from app.api.routes import (
     audit,
     auth,
     data_quality,
+    drift,
     dust_events,
     equipment_activity,
     forecasts,
@@ -123,6 +124,7 @@ def create_app() -> FastAPI:
     fastapi_app.include_router(outcomes.router, prefix=API_PREFIX, dependencies=auth_dep)
     fastapi_app.include_router(training_data.router, prefix=API_PREFIX, dependencies=auth_dep)
     fastapi_app.include_router(model_performance.router, prefix=API_PREFIX, dependencies=auth_dep)
+    fastapi_app.include_router(drift.router, prefix=API_PREFIX, dependencies=auth_dep)
     fastapi_app.include_router(reports.router, prefix=API_PREFIX, dependencies=auth_dep)
     fastapi_app.include_router(shadow_mode.router, prefix=API_PREFIX, dependencies=auth_dep)
     fastapi_app.include_router(audit.router, prefix=API_PREFIX, dependencies=auth_dep)

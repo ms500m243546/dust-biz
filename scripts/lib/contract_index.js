@@ -81,6 +81,12 @@ const PHASE_L = [
   { entity: 'HaulRoadSegmentSilt',         schemaModule: 'app.schemas.road_silt',           schemaClass: 'HaulRoadSegmentSiltSchema',       model: 'HaulRoadSegmentSilt' },
 ];
 
+// M.4.3 — drift watch (no storage model; pure derived view over
+// model_performance_metrics).
+const PHASE_M4 = [
+  { entity: 'DriftAlert',                  schemaModule: 'app.schemas.drift',               schemaClass: 'DriftAlertSchema',                model: null },
+];
+
 const REPOSITORIES = [
   { name: 'SensorReadingRepository',         module: 'app.storage.repositories.sensor_readings' },
   { name: 'WeatherReadingRepository',        module: 'app.storage.repositories.weather_readings' },
@@ -107,6 +113,6 @@ const REPOSITORIES = [
   { name: 'HaulRoadSegmentSiltRepository',      module: 'app.storage.repositories.road_silt' },
 ];
 
-const ENTITIES = [...PHASE_B4, ...PHASE_C, ...PHASE_D, ...PHASE_E, ...PHASE_F, ...PHASE_G, ...PHASE_H, ...PHASE_I, ...PHASE_K, ...PHASE_L];
+const ENTITIES = [...PHASE_B4, ...PHASE_C, ...PHASE_D, ...PHASE_E, ...PHASE_F, ...PHASE_G, ...PHASE_H, ...PHASE_I, ...PHASE_K, ...PHASE_L, ...PHASE_M4];
 
-module.exports = { PHASE_B4, PHASE_C, PHASE_D, PHASE_E, PHASE_F, PHASE_G, PHASE_H, PHASE_I, PHASE_K, PHASE_L, ENTITIES, REPOSITORIES };
+module.exports = { PHASE_B4, PHASE_C, PHASE_D, PHASE_E, PHASE_F, PHASE_G, PHASE_H, PHASE_I, PHASE_K, PHASE_L, PHASE_M4, ENTITIES, REPOSITORIES };
