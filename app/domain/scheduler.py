@@ -165,6 +165,12 @@ def get_default_scheduler() -> Scheduler:
             interval=timedelta(minutes=15),
             func=keyring_prune,
         )
+        # Phase W.1 — weekly dust-forecast retrain. Lazy import so
+        # this module doesn't pull the training stack at import time
+        # (training stack pulls sklearn).
+        from app.domain.training_scheduler import register_weekly_retraining
+
+        register_weekly_retraining(_DEFAULT)
     return _DEFAULT
 
 
