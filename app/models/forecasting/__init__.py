@@ -9,6 +9,10 @@ maybe_promote_gbm`, which is called from the API lifespan hook
 """
 
 from app.models import registry
+from app.models.forecasting.gbm_shared_v0_1_0 import (
+    GBM_SHARED_VERSION,
+    GBMSharedForecaster,
+)
 from app.models.forecasting.gbm_v0_1_0 import (
     GBM_VERSION,
     GBMForecaster,
@@ -20,15 +24,19 @@ from app.models.forecasting.heuristic_baseline import (
 )
 
 # Heuristic baseline is registered first AND set as current — Phase E
-# behaviour preserved. The trained GBM is registered as an additional
-# version (set_as_current=False); promotion is decided downstream.
+# behaviour preserved. The trained variants are registered as
+# additional versions (set_as_current=False); promotion is decided
+# by app.domain.dust_forecast_promotion.
 registry.register(HeuristicBaselineForecaster())
 registry.register(GBMForecaster(), set_as_current=False)
+registry.register(GBMSharedForecaster(), set_as_current=False)
 
 
 __all__ = [
+    "GBM_SHARED_VERSION",
     "GBM_VERSION",
     "GBMForecaster",
+    "GBMSharedForecaster",
     "HEURISTIC_VERSION",
     "HeuristicBaselineForecaster",
     "ModelArtifactNotFoundError",

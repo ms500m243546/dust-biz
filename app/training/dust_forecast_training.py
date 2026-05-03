@@ -54,6 +54,10 @@ from app.domain.evaluation_protocol import (
     ProtocolViolation,
 )
 from app.domain.model_performance import compute_metric_payload
+from app.models.forecasting.gbm_shared_v0_1_0 import (
+    GBM_SHARED_VERSION,
+    shared_artifact_path,
+)
 from app.models.forecasting.gbm_v0_1_0 import (
     GBM_VERSION,
     MODEL_KIND,
@@ -689,6 +693,224 @@ def train_one(
     )
 
 
+@dataclass(frozen=True)
+class SharedTrainingResult:
+    """Result of `train_shared_multi_station()`.
+
+    `per_receptor_ece` is the per-station ECE breakdown from
+    `compute_metric_payload`'s per_receptor block — load-bearing for
+    the Q.2 promotion criterion (`max_per_receptor_ece` is the
+    fairness summary).
+    """
+
+    model_version: str
+    horizon: ForecastHorizon
+    protocol_hash: str
+    train_record_count: int
+    test_record_count: int
+    station_vocab: tuple[str, ...]
+    aggregate_ece: float | None
+    aggregate_mae_pm10: float | None
+    aggregate_breach_recall: float | None
+    per_receptor_ece: dict[str, float | None]
+    artifact_path: Path | None
+    metric_row_id: int | None
+
+
+def train_shared_multi_station(
+    *,
+    station_ids: Iterable[str],
+    session: Session,
+    horizon: ForecastHorizon = DEFAULT_HORIZON,
+    protocol: EvaluationProtocol | None = None,
+    artifact_root: Path | None = None,
+    persist: bool = True,
+) -> SharedTrainingResult:
+    """Phase Q.2 — fit ONE GBM that handles all stations.
+
+    Concatenates all stations' (X, y_pm10, y_breach, ts) tensors and
+    appends per-station one-hot columns. The artifact's
+    `station_vocab` records the column order so inference can encode
+    correctly.
+
+    Per-receptor metrics are still emitted via
+    `compute_metric_payload`, populated by tagging each
+    `TrainingRecordSchema` with `target_id=<station_id>`.
+    """
+    if protocol is None:
+        raise ValueError(
+            "train_shared_multi_station requires an explicit protocol"
+        )
+    horizon_minutes = HORIZON_MINUTES[horizon]
+    pull_from = protocol.train_window_from - timedelta(days=2)
+    pull_to = protocol.test_window_to
+
+    station_list = tuple(station_ids)
+    if not station_list:
+        raise ValueError("station_ids must be non-empty")
+
+    # Build per-station feature matrices, then stack with one-hot.
+    stacked_X: list[np.ndarray] = []
+    stacked_y_pm10: list[np.ndarray] = []
+    stacked_y_breach: list[np.ndarray] = []
+    stacked_ts: list[datetime] = []
+    stacked_station: list[str] = []
+
+    for station_id in station_list:
+        weather_target_id = STATION_WEATHER_TARGETS.get(
+            station_id, DEFAULT_WEATHER_TARGET
+        )
+        pm_series = _realtime_pm10_series(
+            session=session,
+            station_id=station_id,
+            window_from=pull_from,
+            window_to=pull_to,
+        )
+        weather = _weather_series(
+            session=session,
+            weather_target_id=weather_target_id,
+            window_from=pull_from,
+            window_to=pull_to,
+        )
+        if len(pm_series) < 200 or len(weather) < 200:
+            # Skip thin stations — they contribute nothing.
+            continue
+        X, y_pm, y_b, ts = _build_feature_matrix(
+            pm_series=pm_series,
+            weather=weather,
+            horizon_minutes=horizon_minutes,
+        )
+        stacked_X.append(X)
+        stacked_y_pm10.append(y_pm)
+        stacked_y_breach.append(y_b)
+        stacked_ts.extend(ts)
+        stacked_station.extend([station_id] * len(ts))
+
+    if not stacked_X:
+        raise ValueError("no station has enough data for shared training")
+
+    X_all = np.vstack(stacked_X)
+    y_pm10_all = np.concatenate(stacked_y_pm10)
+    y_breach_all = np.concatenate(stacked_y_breach)
+    ts_all = stacked_ts
+    station_all = stacked_station
+
+    # One-hot per station — vocabulary is the union of stations that
+    # actually contributed data.
+    station_vocab = tuple(sorted(set(station_all)))
+    vocab_idx: dict[str, int] = {s: i for i, s in enumerate(station_vocab)}
+    one_hot = np.zeros((len(station_all), len(station_vocab)), dtype=np.float64)
+    for i, s in enumerate(station_all):
+        one_hot[i, vocab_idx[s]] = 1.0
+    X_all = np.hstack([X_all, one_hot])
+
+    train_mask = _window_mask(
+        ts_all, protocol.train_window_from, protocol.train_window_to
+    )
+    test_mask = _window_mask(
+        ts_all, protocol.test_window_from, protocol.test_window_to
+    )
+    X_train, y_pm10_train, y_breach_train = (
+        X_all[train_mask],
+        y_pm10_all[train_mask],
+        y_breach_all[train_mask],
+    )
+    X_test, y_pm10_test = X_all[test_mask], y_pm10_all[test_mask]
+    ts_test = [t for t, m in zip(ts_all, test_mask, strict=True) if m]
+    station_test = [s for s, m in zip(station_all, test_mask, strict=True) if m]
+
+    if len(X_train) < 100 or len(X_test) < 30:
+        raise ValueError(
+            f"shared trainer: insufficient supervised rows train={len(X_train)} "
+            f"test={len(X_test)}"
+        )
+
+    regressor, classifier = _fit_models(
+        X_train, y_pm10_train, y_breach_train, recalibrate=False
+    )
+
+    pred_pm10 = regressor.predict(X_test)
+    proba = classifier.predict_proba(X_test)
+    pred_breach = proba[:, 1] if proba.shape[1] >= 2 else proba[:, 0]
+
+    # Synth records — tag target_id per row so per_receptor split
+    # produces the fairness breakdown the M.4.2 audit expects.
+    records = [
+        TrainingRecordSchema(
+            prediction_id=f"shared::{station_test[i]}::{ts_test[i].isoformat()}",
+            issued_at=ts_test[i],
+            target_kind="sensor",
+            target_id=station_test[i],
+            forecast_horizon=horizon,
+            predicted_pm10=float(pred_pm10[i]),
+            predicted_pm25=0.0,
+            predicted_breach_probability=float(pred_breach[i]),
+            confidence=0.7,
+            model_version=GBM_SHARED_VERSION,
+            human_action="no_recommendation",
+            actual_pm10_peak=float(y_pm10_test[i]),
+            breach_occurred=bool(y_pm10_test[i] >= PM10_BREACH),
+            outcome_status="observed",
+            recorded_at=ts_test[i],
+        )
+        for i in range(len(ts_test))
+    ]
+
+    payload = compute_metric_payload(
+        records, protocol=protocol, session=session
+    )
+
+    per_receptor = payload.get("per_receptor", {}) or {}
+    per_receptor_ece: dict[str, float | None] = {
+        sid: (block.get("ece") if isinstance(block, dict) else None)
+        for sid, block in per_receptor.items()
+    }
+
+    out_artifact_path: Path | None = None
+    metric_row_id: int | None = None
+    if persist:
+        artifact_payload = {
+            "model": {"regressor": regressor, "classifier": classifier},
+            "feature_columns": list(FEATURE_SET_P1),
+            "station_vocab": list(station_vocab),
+            "feature_pipeline_version": FEATURE_PIPELINE_VERSION,
+            "training_protocol_hash": protocol.protocol_hash,
+            "training_protocol_version": protocol.protocol_version,
+            "horizon": horizon,
+            "trained_at": datetime.now(UTC).replace(tzinfo=None).isoformat(),
+        }
+        out_artifact_path = shared_artifact_path(
+            artifact_root=artifact_root,
+            model_version=GBM_SHARED_VERSION,
+            horizon=horizon,
+        )
+        out_artifact_path.parent.mkdir(parents=True, exist_ok=True)
+        joblib.dump(artifact_payload, out_artifact_path)
+        metric_row_id = _persist_metric_row(
+            session=session,
+            model_version=GBM_SHARED_VERSION,
+            window_from=protocol.test_window_from,
+            window_to=protocol.test_window_to,
+            sample_count=len(ts_test),
+            metric_payload=payload,
+        )
+
+    return SharedTrainingResult(
+        model_version=GBM_SHARED_VERSION,
+        horizon=horizon,
+        protocol_hash=protocol.protocol_hash,
+        train_record_count=int(train_mask.sum()),
+        test_record_count=len(ts_test),
+        station_vocab=station_vocab,
+        aggregate_ece=_as_float(payload.get("ece")),
+        aggregate_mae_pm10=_as_float(payload.get("mae_pm10")),
+        aggregate_breach_recall=_as_float(payload.get("breach_recall")),
+        per_receptor_ece=per_receptor_ece,
+        artifact_path=out_artifact_path,
+        metric_row_id=metric_row_id,
+    )
+
+
 def train_many(
     *,
     station_ids: Iterable[str],
@@ -842,11 +1064,14 @@ __all__ = [
     "DEFAULT_WEATHER_TARGET",
     "MULTI_STATION_ROSTER",
     "GBM_VERSION",
+    "GBM_SHARED_VERSION",
     "MODEL_KIND",
     "PromotionDecision",
+    "SharedTrainingResult",
     "TrainingResult",
     "build_p1_protocol",
     "decide_promotion",
     "train_one",
     "train_many",
+    "train_shared_multi_station",
 ]

@@ -31,6 +31,7 @@ from app.training.dust_forecast_training import (  # noqa: E402
     build_p1_protocol,
     train_many,
     train_one,
+    train_shared_multi_station,
 )
 
 # Phase P.1 default windows. Cuncumén has data from 2025-05-03 →
@@ -90,6 +91,15 @@ def main(argv: list[str] | None = None) -> int:
             "captured, not raised."
         ),
     )
+    parser.add_argument(
+        "--shared",
+        action="store_true",
+        help=(
+            "Phase Q.2 — fit ONE shared multi-station GBM with station_id "
+            "one-hot. Distinct model_version (dust_forecast_gbm_shared_v0.1.0); "
+            "writes a single artifact + metric_payload row."
+        ),
+    )
     args = parser.parse_args(argv)
 
     protocol = build_p1_protocol(
@@ -111,6 +121,26 @@ def main(argv: list[str] | None = None) -> int:
 
     horizon: ForecastHorizon = args.horizon  # type: ignore[assignment]
     from app.storage.database import session_scope  # noqa: E402
+
+    if args.shared:
+        with session_scope() as session:
+            sresult = train_shared_multi_station(
+                station_ids=MULTI_STATION_ROSTER,
+                session=session,
+                horizon=horizon,
+                protocol=protocol,
+                persist=not args.no_persist,
+            )
+        print(
+            f"shared: {sresult.model_version} train_n={sresult.train_record_count} "
+            f"test_n={sresult.test_record_count} "
+            f"agg_ece={sresult.aggregate_ece} agg_mae={sresult.aggregate_mae_pm10} "
+            f"agg_recall={sresult.aggregate_breach_recall} "
+            f"vocab={list(sresult.station_vocab)} metric_id={sresult.metric_row_id}"
+        )
+        for sid, ece in sorted(sresult.per_receptor_ece.items()):
+            print(f"  per_receptor[{sid}].ece = {ece}")
+        return 0
 
     if args.all_stations:
         with session_scope() as session:

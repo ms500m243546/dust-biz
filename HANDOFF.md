@@ -1,8 +1,8 @@
 # DustOps AI — Session Handoff
 
 **As of:** 2026-05-03
-**Active phase:** Phase Q.1 complete — multi-station GBM trained on 4/5 SINCA stations (Calama 275 had thin data; placeholder result). 70k weather records + 36k PM10 records driving the batch. Autonomous P→Q→R→S batch continues with Q.2 (shared multi-station model).
-**Last completed:** Q.1 — `train_many()` over `MULTI_STATION_ROSTER` with per-station exception capture. Added `weather_targets:` to 3 new mine YAMLs + pulled 52,704 Open-Meteo records.
+**Active phase:** Phase Q.2 complete — shared multi-station GBM landed. Single artifact handles all 5 stations via station_id one-hot; aggregate ECE 0.003, MAE 11.05. Autonomous P→Q→R→S batch continues with Q.3 (B-5 / B-6 / B-14 mitigations).
+**Last completed:** Q.2 — `GBMSharedForecaster` + `train_shared_multi_station()` + `--shared` CLI flag.
 **Validation gate:** `npm run agent-check` GREEN, **21 PASS / 0 SKIP / 0 FAIL**.
 
 ---
