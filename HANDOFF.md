@@ -1,26 +1,39 @@
 # DustOps AI — Session Handoff
 
 **As of:** 2026-05-03
-**Active phase:** M.4 block complete — calibration + covariate discipline (M.4.1), UI surfacing of M.3 + M.4.1 fields (M.3.2), per-receptor fairness + Goodhart canaries (M.4.2), drift watch (M.4.3). End of M.4: 5 biases closed (B-12, B-18, B-30, B-32, B-44).
-**Last completed:** M.4.3 — `app/domain/drift_watch.py` + `DriftAlertSchema` + `GET /api/v1/drift` + `validate-drift-discipline.js` (#21 in the gate).
-**Validation gate:** `npm run agent-check` GREEN, **21 PASS / 0 SKIP / 0 FAIL** (was 20 at M.3.1; +1 new validator). 584 backend tests + 17 web tests.
+**Active phase:** Phase N complete — drift-watch UI surfacing. M.4 block (M.4.1 + M.3.2 + M.4.2 + M.4.3) and N now done. 5 biases closed (B-12, B-18, B-30, B-32, B-44).
+**Last completed:** Phase N — `web/src/views/Drift.tsx` mounted at `/drift`, role-gated to `environmental_manager` + `admin`, consumes `GET /api/v1/drift`. New `api.driftAlerts()` client method + `DriftAlertSchema` wire type. ui-principles annex documents the role-restricted view.
+**Validation gate:** `npm run agent-check` GREEN, **21 PASS / 0 SKIP / 0 FAIL**. 584 backend tests + 25 web tests (was 17 at M.3.2; +8 from `drift.test.tsx`).
 
 ---
 
 ## State at handoff
 
-- All M.4 + M.3.2 changes committed. Working tree clean.
+- Phase N changes uncommitted (8 files: `web/src/views/Drift.tsx`, `web/src/__tests__/drift.test.tsx`, `web/src/api/types.ts`, `web/src/api/client.ts`, `web/src/views/Layout.tsx`, `web/src/App.tsx`, `docs/ui-principles.md`, `docs/normalization_report.md`, plus this handoff). M.4 changes were already committed.
 - Recent commits (newest first):
   - `892fda3` Phase M.4.3 — drift watch (B-12)
   - `58097e6` Phase M.4.2 — fairness + Goodhart canaries (B-32, B-44)
   - `acac35b` Phase M.3.2 — UI surfacing of causal + calibration fields
   - `ad5c7f0` Phase M.4.1 — calibration acceptance gate + covariate discipline (B-30, B-18)
   - `6b8a7ab` Phase M.1 + M.2 + M.3.1 — anti-overfit + anti-hindsight + causal disclosure
-- Rollback log: `phase-m4-1-pre-calibration`, `phase-m4-2-pre-fairness`, `phase-m4-3-pre-drift`. (M.3.2 has no snapshot — git revert `acac35b` is the revert path.)
-- DB state: no schema migration required for M.4 / M.3.2 (all new fields live in `metric_payload` JSON or are computed views).
-- Memory: `project_phase_m4_complete.md` should supersede `project_phase_m3_complete.md`.
+- Rollback log: `phase-m4-1-pre-calibration`, `phase-m4-2-pre-fairness`, `phase-m4-3-pre-drift`, `phase-n-pre-drift-ui`. (M.3.2 has no snapshot — git revert `acac35b` is the revert path.)
+- DB state: no schema migration required for Phase N (read-only consumer of an existing endpoint).
+- Memory: `project_phase_m4_complete.md` superseded by new `project_phase_n_complete.md` entry.
 
 ---
+
+## What shipped in Phase N
+
+- `web/src/views/Drift.tsx` — single-card drift dashboard. Polls `GET /api/v1/drift` every 60s; defaults `model_version` to the most recent `modelPerformance()` row; window picker 14 / 30 / 90 days. Per-row severity tier yellow ≥ 1× threshold ("NOTICE") / red ≥ 2× threshold ("ACT"); card border tracks the worst tier. Two distinct empty states ("No model_performance rows yet" vs "No drift detected in window"). Detection-only — no approve/reject controls.
+- `web/src/api/types.ts` — `DriftAlertSchema` added (mirror of backend `app/schemas/drift.py`).
+- `web/src/api/client.ts` — `api.driftAlerts({ model_version, since_days, min_samples })` method.
+- `web/src/views/Layout.tsx` — nav link "Drift" rendered only when `user.role ∈ { environmental_manager, admin }`.
+- `web/src/App.tsx` — `/drift` route wrapped in `RoleGate`; non-allowed roles redirect to `/control-room`.
+- `web/src/__tests__/drift.test.tsx` — 8 vitest cases: severity helper, version dedup, alerts table, no-drift empty state, window-switch refetch, error row, model-performance-empty empty state.
+- `docs/ui-principles.md` — annex section "Drift view (Phase N — env_manager + admin only)".
+- `docs/normalization_report.md` — Phase N entry promoted to Active.
+
+**Why a useEffect-driven reload inside `Drift.tsx`:** `useApi`'s `reload` is bound on mount with `useCallback([])`, so it does not naturally re-trigger when the `fetchDrift` closure changes (model_version / since_days picker). The component calls `drift.reload()` from a small effect tied to those state values; `fnRef` inside `useApi` is already kept current. Documented inline; consider lifting into `useApi` later if a second view needs the same pattern.
 
 ## What shipped in the M.4 block
 
@@ -93,10 +106,11 @@
 
 **Concrete next session priorities:**
 
-1. **Run the deferred 12-month Open-Meteo live pull** when network is stable. Idempotent.
-2. **Phase N (proposed):** drift-watch UI surfacing — operator-facing `Drift` view in the dashboard that calls `GET /api/v1/drift` and renders alerts. Currently API-only.
+1. **Commit Phase N** (8 modified/created files; rollback snapshot `phase-n-pre-drift-ui` already taken).
+2. **Run the deferred 12-month Open-Meteo live pull** when network is stable. Idempotent.
 3. **Phase M.3.3** — true intervention-window cutoff. Blocked on operator-real telematics; gated by Antofagasta partnership.
 4. **Phase O (proposed):** post-M biases that bite at second-mine deployment — B-5 / B-6 / B-14 (Los Bronces). Multi-station survivorship + distribution-shift mitigation needs ≥ 2 stations of real data first.
+5. **Phase N follow-ups (deferred):** alert acknowledgement / persistence, per-metric filtering, feature-distribution drift (PSI/KL — needs feature-distribution snapshots stored per row).
 
 ---
 

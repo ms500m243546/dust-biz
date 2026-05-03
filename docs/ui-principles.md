@@ -72,6 +72,26 @@ If a UI element does not help an operator decide, remove it.
 - Monthly savings
 - Environmental performance trend
 
+### Annex: Drift view (Phase N — env_manager + admin only)
+
+A role-restricted, model-trust surface mounted at `/drift`. Not one of
+the four primary operator views — visible only to
+`environmental_manager` and `admin`; other roles get the calibration
+badge (M.4.1) on the recommendation card for per-decision trust.
+
+- One card surfacing detected metric drift for the selected
+  `model_version` over the selected window (14 / 30 / 90 days).
+- Polled at 60s (same cadence as Compliance).
+- Alert rows: metric name, baseline median, recent median, |Δ|,
+  threshold, baseline / recent sample counts, detection time.
+- Severity tier per row: yellow ≥ 1× threshold ("NOTICE"), red ≥ 2×
+  threshold ("ACT"). Card-level border tracks the worst tier present.
+- Empty states are explicit: "No model_performance rows yet" (cannot
+  compute drift) vs "No drift detected in window" (computed, clean).
+- Detection-only. The view never executes a retrain or rollback — that
+  is the operational playbook's job (post-M). No approve/reject
+  buttons; this is a monitoring surface, not a decision surface.
+
 ---
 
 ## Design rules

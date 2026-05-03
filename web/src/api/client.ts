@@ -12,6 +12,7 @@ import type {
   DustEventSchema,
   InterventionEffectiveness,
   ModelPerformanceMetricSchema,
+  DriftAlertSchema,
 } from './types';
 
 const TOKEN_KEY = 'dustops.token';
@@ -135,4 +136,14 @@ export const api = {
 
   modelPerformance: () =>
     request<ModelPerformanceMetricSchema[]>('/model-performance'),
+
+  // M.4.3 / Phase N — drift watch. Pure derived view; the API recomputes
+  // on every read against persisted model_performance_metrics rows for
+  // the given model_version.
+  driftAlerts: (params: { model_version: string; since_days?: number; min_samples?: number }) => {
+    const q = new URLSearchParams({ model_version: params.model_version });
+    if (params.since_days != null) q.set('since_days', String(params.since_days));
+    if (params.min_samples != null) q.set('min_samples', String(params.min_samples));
+    return request<DriftAlertSchema[]>(`/drift?${q.toString()}`);
+  },
 };

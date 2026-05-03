@@ -267,6 +267,21 @@ export interface ActionOutcomeSchema {
   recorded_by: string;
 }
 
+// M.4.3 — drift-watch alert. One per metric whose median crossed the
+// per-metric threshold in DRIFT_THRESHOLDS between baseline and recent
+// halves of the requested window.
+export interface DriftAlertSchema {
+  model_version: string;
+  metric_name: string;
+  baseline_value: number;
+  recent_value: number;
+  delta: number;
+  threshold: number;
+  baseline_sample_count: number;
+  recent_sample_count: number;
+  detected_at: string;
+}
+
 export interface DustEventSchema {
   event_id: string;
   detected_at: string;
