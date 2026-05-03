@@ -27,7 +27,9 @@ sys.path.insert(0, str(ROOT))
 from app.schemas.forecasts import ForecastHorizon  # noqa: E402
 from app.training.dust_forecast_training import (  # noqa: E402
     DEFAULT_HORIZON,
+    MULTI_STATION_ROSTER,
     build_p1_protocol,
+    train_many,
     train_one,
 )
 
@@ -79,6 +81,15 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Run the fit but skip artifact + metric_payload writes.",
     )
+    parser.add_argument(
+        "--all-stations",
+        action="store_true",
+        help=(
+            "Phase Q.1 — fit all stations in MULTI_STATION_ROSTER (5 stations "
+            "across 4 mines / 2 SINCA regions). Per-station failures are "
+            "captured, not raised."
+        ),
+    )
     args = parser.parse_args(argv)
 
     protocol = build_p1_protocol(
@@ -100,6 +111,26 @@ def main(argv: list[str] | None = None) -> int:
 
     horizon: ForecastHorizon = args.horizon  # type: ignore[assignment]
     from app.storage.database import session_scope  # noqa: E402
+
+    if args.all_stations:
+        with session_scope() as session:
+            results = train_many(
+                station_ids=MULTI_STATION_ROSTER,
+                session=session,
+                horizon=horizon,
+                protocol=protocol,
+                persist=not args.no_persist,
+            )
+        for r in results:
+            print(
+                f"  {r.station_id:25s} train_n={r.train_record_count:>6d} "
+                f"test_n={r.test_record_count:>5d} ece={r.ece} "
+                f"mae_pm10={r.mae_pm10} breach_recall={r.breach_recall} "
+                f"recal={r.recalibrated} metric_id={r.metric_row_id}"
+            )
+        ok = sum(1 for r in results if r.metric_row_id is not None)
+        print(f"multi-station summary: {ok}/{len(results)} fitted + persisted")
+        return 0
 
     with session_scope() as session:
         result = train_one(

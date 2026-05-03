@@ -44,3 +44,19 @@ sensors:
       SINCA-public proxy for Antofagasta Minerals' second-pilot
       region. Empirical macropath ./RII/204/Cal/PM10 (legacy string
       param code, not numeric — older station vintage).
+
+# Phase Q.1 — Open-Meteo weather targets. Pit centroid + Sierra Gorda
+# town receptor. Sierra Gorda sits ~5 km W of the Centinela /
+# Esperanza cluster; this single receptor target is enough for
+# multi-station fairness work.
+weather_targets:
+  - target_id: cnt-mine-centroid
+    longitude: -69.3330
+    latitude: -22.8920
+    zone_id: null
+    notes: Centinela / Esperanza pit centroid; site-wide weather proxy.
+  - target_id: cnt-sierra-gorda-met
+    longitude: -69.3140
+    latitude: -22.8800
+    zone_id: null
+    notes: Co-located with SINCA station 255 (Sierra Gorda town).

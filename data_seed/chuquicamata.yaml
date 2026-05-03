@@ -70,3 +70,19 @@ sensors:
     notes: Chiu Chiu (Codelco Distrito Norte / CIMM). MMA portal page
       shows hourly window 2008-2009 only — likely dormant. Skipped
       by default; --include-empty to re-probe.
+
+# Phase Q.1 — Open-Meteo weather targets. Pit centroid + the two
+# Calama receptors (207 = Club 23 de Marzo, 275 = Centro). Calama
+# town is ~15 km SE of the pit; the two receptor-co-located targets
+# capture the in-town gradient that pairs with the SINCA series.
+weather_targets:
+  - target_id: chq-mine-centroid
+    longitude: -68.9010
+    latitude: -22.2930
+    zone_id: null
+    notes: Chuquicamata pit centroid; site-wide weather proxy.
+  - target_id: chq-calama-met
+    longitude: -68.9290
+    latitude: -22.4540
+    zone_id: null
+    notes: Co-located with SINCA stations 207 + 275 (central Calama).

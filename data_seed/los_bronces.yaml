@@ -155,6 +155,22 @@ sensors:
     is_compliance_station: false
     sinca_station_code: TODO_FROM_RCA
 
+# Phase Q.1 — Open-Meteo weather targets. Two points: pit centroid
+# (site-wide proxy) and the Las Condes receptor (co-located with
+# SINCA station 239). Pairs the receptor's PM10 series with its own
+# meteorology so the GBM can learn the receptor-specific transport.
+weather_targets:
+  - target_id: lb-mine-centroid
+    longitude: -70.2900
+    latitude: -33.1500
+    zone_id: null
+    notes: Approximate Los Bronces pit centroid; site-wide weather proxy.
+  - target_id: lb-las-condes-met
+    longitude: -70.5500
+    latitude: -33.4000
+    zone_id: null
+    notes: Co-located with SINCA station 239 (Las Condes PM10).
+
 # Per-station threshold overrides. The Los Bronces RCAs +
 # Santiago PPDA impose a lower PM2.5 daily limit than D.S. 12/2011
 # at the eastern Santiago community stations — verify exact value

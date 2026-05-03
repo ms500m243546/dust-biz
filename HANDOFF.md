@@ -1,8 +1,8 @@
 # DustOps AI — Session Handoff
 
 **As of:** 2026-05-03
-**Active phase:** Phase P.3 complete — GBM is now the `current` `dust_forecast` model on any process with the Phase P.2 metric row in its DB. Phase P done. Autonomous P→Q→R→S batch continues with Q.1.
-**Last completed:** P.3 — `app.domain.dust_forecast_promotion.maybe_promote_gbm` evaluates `decide_promotion()` over the latest persisted M.4 metric_payload row and flips the registry; wired into FastAPI lifespan. Tolerant — heuristic stays current on any failure.
+**Active phase:** Phase Q.1 complete — multi-station GBM trained on 4/5 SINCA stations (Calama 275 had thin data; placeholder result). 70k weather records + 36k PM10 records driving the batch. Autonomous P→Q→R→S batch continues with Q.2 (shared multi-station model).
+**Last completed:** Q.1 — `train_many()` over `MULTI_STATION_ROSTER` with per-station exception capture. Added `weather_targets:` to 3 new mine YAMLs + pulled 52,704 Open-Meteo records.
 **Validation gate:** `npm run agent-check` GREEN, **21 PASS / 0 SKIP / 0 FAIL**.
 
 ---

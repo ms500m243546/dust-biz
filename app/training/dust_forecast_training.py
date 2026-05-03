@@ -110,12 +110,32 @@ PM10_BREACH = 150.0
 # re-derived later. Bump when this module's feature semantics change.
 FEATURE_PIPELINE_VERSION = "feature_pipeline_p1_v0.1.0"
 
-# Per-station weather target. Phase P.1 pilots Cuncumén; future
-# phases extend per the data_seed YAMLs.
+# Per-station weather target. Phase Q.1 fans out to all 5 SINCA-public
+# stations across 4 mines. Each station is paired with the receptor-
+# co-located weather target from the corresponding data_seed YAML so
+# the GBM can learn receptor-specific transport. Mine-centroid weather
+# is tracked separately and reserved for future zone-anchored modelling.
 STATION_WEATHER_TARGETS: dict[str, str] = {
     "lp-em05-cuncumen": "lp-cuncumen-met",
+    "lb-las-condes": "lb-las-condes-met",
+    "chq-club-23-marzo": "chq-calama-met",
+    "chq-calama-centro": "chq-calama-met",
+    "cnt-sierra-gorda": "cnt-sierra-gorda-met",
 }
 DEFAULT_WEATHER_TARGET = "lp-mine-centroid"
+
+# Phase Q.1 — the canonical multi-station roster for batch training.
+# Mirrors the 5 stations in data_seed/*.yaml with `sinca_data_status:
+# has_data`. Per-station fits live under one shared model_version
+# (`dust_forecast_gbm_v0.1.0`); the registry resolves by (station_id,
+# horizon) artifact path inside `GBMForecaster.predict()`.
+MULTI_STATION_ROSTER: tuple[str, ...] = (
+    "lp-em05-cuncumen",
+    "lb-las-condes",
+    "chq-club-23-marzo",
+    "chq-calama-centro",
+    "cnt-sierra-gorda",
+)
 
 
 @dataclass(frozen=True)
@@ -669,6 +689,56 @@ def train_one(
     )
 
 
+def train_many(
+    *,
+    station_ids: Iterable[str],
+    session: Session,
+    horizon: ForecastHorizon = DEFAULT_HORIZON,
+    protocol: EvaluationProtocol | None = None,
+    artifact_root: Path | None = None,
+    persist: bool = True,
+) -> list[TrainingResult]:
+    """Phase Q.1 — fit one GBM per station, all under the same model_version.
+
+    Per-station failures are *captured*, not raised: each station's
+    `train_one` call is wrapped in try/except and any exception is
+    surfaced as a `TrainingResult` with `ece=mae_pm10=breach_recall=
+    artifact_path=metric_row_id=None` so the caller's dashboard can
+    render a partial-success row. Hard failures (`ProtocolViolation`
+    after recalibration, etc.) re-raise — the SG-1 stop-gate.
+    """
+    results: list[TrainingResult] = []
+    for station_id in station_ids:
+        try:
+            r = train_one(
+                station_id=station_id,
+                session=session,
+                horizon=horizon,
+                protocol=protocol,
+                artifact_root=artifact_root,
+                persist=persist,
+            )
+        except ValueError:
+            # Insufficient data — skip with a placeholder result row
+            # so the operator sees which station was thin.
+            r = TrainingResult(
+                model_version=GBM_VERSION,
+                station_id=station_id,
+                horizon=horizon,
+                protocol_hash=protocol.protocol_hash if protocol else "",
+                train_record_count=0,
+                test_record_count=0,
+                ece=None,
+                mae_pm10=None,
+                breach_recall=None,
+                artifact_path=None,
+                metric_row_id=None,
+                recalibrated=False,
+            )
+        results.append(r)
+    return results
+
+
 def _window_mask(
     ts: Iterable[datetime], from_: datetime, to_: datetime
 ) -> np.ndarray:
@@ -770,6 +840,7 @@ __all__ = [
     "PROMOTION_MIN_TEST_SAMPLES",
     "STATION_WEATHER_TARGETS",
     "DEFAULT_WEATHER_TARGET",
+    "MULTI_STATION_ROSTER",
     "GBM_VERSION",
     "MODEL_KIND",
     "PromotionDecision",
@@ -777,4 +848,5 @@ __all__ = [
     "build_p1_protocol",
     "decide_promotion",
     "train_one",
+    "train_many",
 ]
