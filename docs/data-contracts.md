@@ -118,8 +118,17 @@ Tables with M.3 causal-protocol columns (live since 2026-05-03):
 - `mine_id` (FK)
 - `equipment_type` (enum: `truck`, `shovel`, `crusher`, `drill`,
   `dozer`, `grader`, `water_truck`, `other`)
-- `nominal_capacity_t` (float, optional)
+- `nominal_capacity_t` (float, optional) — manufacturer-rated payload
+- `empty_weight_tonnes` (float, optional, Phase O.1) — truck tare; W in
+  AP-42 = `empty_weight_tonnes + EquipmentActivity.tonnage`
+- `tire_contact_area_m2` (float, optional, Phase O.1) — alternative
+  haul-truck dust proxy
+- `tire_count` (int, optional, Phase O.1) — typically 6 for haul trucks
+- `axle_count` (int, optional, Phase O.1)
 - `created_at`
+
+See `docs/training-features.md` for the AP-42 unpaved-haul-road
+formula and the per-mine back-fill convention.
 
 ### `equipment_activity` (immutable, raw)
 - `activity_id` (PK)

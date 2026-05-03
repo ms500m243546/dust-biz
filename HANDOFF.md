@@ -1,24 +1,36 @@
 # DustOps AI — Session Handoff
 
 **As of:** 2026-05-03
-**Active phase:** Phase N complete — drift-watch UI surfacing. M.4 block (M.4.1 + M.3.2 + M.4.2 + M.4.3) and N now done. 5 biases closed (B-12, B-18, B-30, B-32, B-44).
-**Last completed:** Phase N — `web/src/views/Drift.tsx` mounted at `/drift`, role-gated to `environmental_manager` + `admin`, consumes `GET /api/v1/drift`. New `api.driftAlerts()` client method + `DriftAlertSchema` wire type. ui-principles annex documents the role-restricted view.
-**Validation gate:** `npm run agent-check` GREEN, **21 PASS / 0 SKIP / 0 FAIL**. 584 backend tests + 25 web tests (was 17 at M.3.2; +8 from `drift.test.tsx`).
+**Active phase:** Phase O.1 complete — equipment truck-geometry schema (AP-42 inputs landed; awaiting per-mine back-fill). Real-data on-ramp progress: (1) Open-Meteo 12mo done (17,568 records), (2) SINCA Cuncumén 12mo confirmed (8,603 records), (3) O.1 equipment-schema gap closed. Next: O.2 multi-mine SINCA survey, then real model training.
+**Last completed:** Phase O.1 — `equipment.{empty_weight_tonnes, tire_contact_area_m2, tire_count, axle_count}` (all nullable). New `scripts/migrate_equipment_truck_geometry.py` (idempotent). New `docs/training-features.md` mapping every model-input variable to its column or remaining gap. `docs/data-contracts.md` Equipment row updated.
+**Validation gate:** `npm run agent-check` GREEN, **21 PASS / 0 SKIP / 0 FAIL**. 587 backend tests (+3 schema cases) + 25 web tests.
 
 ---
 
 ## State at handoff
 
-- Phase N changes uncommitted (8 files: `web/src/views/Drift.tsx`, `web/src/__tests__/drift.test.tsx`, `web/src/api/types.ts`, `web/src/api/client.ts`, `web/src/views/Layout.tsx`, `web/src/App.tsx`, `docs/ui-principles.md`, `docs/normalization_report.md`, plus this handoff). M.4 changes were already committed.
+- Phase O.1 changes uncommitted (8 files: `app/storage/models/mine.py`, `app/schemas/equipment.py`, `tests/schemas/test_equipment.py`, `docs/data-contracts.md`, `docs/normalization_report.md`, this handoff, plus created `scripts/migrate_equipment_truck_geometry.py` and `docs/training-features.md`). Phase N was committed as `9670a9f`.
 - Recent commits (newest first):
+  - `9670a9f` Phase N — drift-watch UI surfacing
   - `892fda3` Phase M.4.3 — drift watch (B-12)
   - `58097e6` Phase M.4.2 — fairness + Goodhart canaries (B-32, B-44)
   - `acac35b` Phase M.3.2 — UI surfacing of causal + calibration fields
   - `ad5c7f0` Phase M.4.1 — calibration acceptance gate + covariate discipline (B-30, B-18)
-  - `6b8a7ab` Phase M.1 + M.2 + M.3.1 — anti-overfit + anti-hindsight + causal disclosure
-- Rollback log: `phase-m4-1-pre-calibration`, `phase-m4-2-pre-fairness`, `phase-m4-3-pre-drift`, `phase-n-pre-drift-ui`. (M.3.2 has no snapshot — git revert `acac35b` is the revert path.)
-- DB state: no schema migration required for Phase N (read-only consumer of an existing endpoint).
-- Memory: `project_phase_m4_complete.md` superseded by new `project_phase_n_complete.md` entry.
+- Rollback log: `phase-m4-1-pre-calibration`, `phase-m4-2-pre-fairness`, `phase-m4-3-pre-drift`, `phase-n-pre-drift-ui`, `phase-o1-pre-equipment-schema`.
+- DB state: O.1 migration ran on dev SQLite — `equipment` now carries 4 new nullable columns (`empty_weight_tonnes`, `tire_contact_area_m2`, `tire_count`, `axle_count`). All NULL until per-mine back-fill. Idempotent.
+- Real-data on-ramp progress (this session): 17,568 Open-Meteo weather records (2025-05-03 → 2026-05-03 at mine-centroid + Cuncumén met point) + SINCA Cuncumén 424 PM10 series (8,603 hourly records over the same window) + confirmation that the other 8 SINCA Choapa stations are still empty in 2026.
+- Memory: new `project_phase_o1_complete.md` should supersede `project_phase_n_complete.md`.
+
+## What shipped in Phase O.1
+
+- `app/storage/models/mine.py:Equipment` — 4 new nullable columns (`empty_weight_tonnes`, `tire_contact_area_m2`, `tire_count`, `axle_count`) for AP-42 unpaved-haul-road inputs.
+- `app/schemas/equipment.py:EquipmentSchema` — Pydantic mirror with `ge=0.0` / `ge=0` validators.
+- `scripts/migrate_equipment_truck_geometry.py` — idempotent ALTER TABLE; ran successfully on `dustops.db`.
+- `tests/schemas/test_equipment.py` — 3 new cases (legacy nullable round-trip, populated round-trip with Komatsu 930E reference values, negative-value rejection).
+- `docs/training-features.md` — new file mapping every feature variable a real model would consume to its column or remaining gap (atmospheric, particulate ground truth, AP-42 haul-truck, mine state). Includes per-mine back-fill convention with reference truck datasheets (Komatsu 930E/980E, Cat 793F/797F).
+- `docs/data-contracts.md` — Equipment row updated.
+
+**Scope deliberately trimmed**: no `feature_pipeline.py` change. Real-model integration of these features is whichever Phase first trains a real model — premature to wire them in now per CLAUDE.md "no half-finished implementations" / "no design for hypothetical future requirements." The schema is ready, that's enough.
 
 ---
 
@@ -106,11 +118,13 @@
 
 **Concrete next session priorities:**
 
-1. **Commit Phase N** (8 modified/created files; rollback snapshot `phase-n-pre-drift-ui` already taken).
-2. **Run the deferred 12-month Open-Meteo live pull** when network is stable. Idempotent.
-3. **Phase M.3.3** — true intervention-window cutoff. Blocked on operator-real telematics; gated by Antofagasta partnership.
-4. **Phase O (proposed):** post-M biases that bite at second-mine deployment — B-5 / B-6 / B-14 (Los Bronces). Multi-station survivorship + distribution-shift mitigation needs ≥ 2 stations of real data first.
-5. **Phase N follow-ups (deferred):** alert acknowledgement / persistence, per-metric filtering, feature-distribution drift (PSI/KL — needs feature-distribution snapshots stored per row).
+1. **Commit Phase O.1** (8 files; rollback snapshot `phase-o1-pre-equipment-schema` already taken).
+2. **Phase O.2 — multi-mine SINCA survey** (next on the data on-ramp). Survey SINCA's Coquimbo/Atacama/Antofagasta region station list for hourly/daily PM10 stations near *other* target mines (Codelco / BHP Escondida / Anglo). New YAML + 12mo pull. Cheap engineering (~1 day); unblocks Phase O proper, AERMOD/CALPUFF dispersion, and second-mine work. *Only if 2 fails to find ≥ 2 viable stations*: Phase O.3 — SMA SEIA scrape (PDF parsing, real engineering).
+3. **Per-mine back-fill of Phase O.1 columns** for Los Pelambres fleet (one-time data exercise; needs operator fleet roster or OEM datasheet research).
+4. **Phase O proper** — post-M biases that bite at second-mine deployment (B-5 / B-6 / B-14). Gated on O.2.
+5. **Real model training (Phase P proposed)** — replace the heuristic `DustForecastModel` with an actual ML model trained on real Cuncumén PM10 + Open-Meteo weather. M.4 calibration gate, M.4.3 drift watch, and M.3.1 causal discipline finally start earning their keep. Gated on O.2 + O.1 back-fill.
+6. **Phase M.3.3** — true intervention-window cutoff. Still blocked on operator-real telematics (Antofagasta partnership).
+7. **Phase N follow-ups (deferred):** alert acknowledgement / persistence, per-metric filtering, feature-distribution drift (PSI/KL).
 
 ---
 

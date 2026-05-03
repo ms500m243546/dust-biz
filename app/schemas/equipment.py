@@ -39,6 +39,12 @@ class EquipmentSchema(BaseModel):
     mine_id: str
     equipment_type: EquipmentType
     nominal_capacity_t: float | None = Field(default=None, ge=0.0)
+    # Phase O.1 — AP-42 unpaved-haul-road inputs. See
+    # docs/training-features.md for the formula and provenance.
+    empty_weight_tonnes: float | None = Field(default=None, ge=0.0)
+    tire_contact_area_m2: float | None = Field(default=None, ge=0.0)
+    tire_count: int | None = Field(default=None, ge=0)
+    axle_count: int | None = Field(default=None, ge=0)
 
 
 class RawEquipmentActivitySchema(BaseModel):

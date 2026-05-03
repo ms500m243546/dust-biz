@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, String
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -75,6 +75,17 @@ class Equipment(Base):
     mine_id: Mapped[str] = mapped_column(ForeignKey("mines.mine_id"), nullable=False)
     equipment_type: Mapped[str] = mapped_column(String, nullable=False)
     nominal_capacity_t: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Phase O.1: AP-42 unpaved-haul-road inputs. W in the formula
+    # E = k * (s/12)^a * (W/3)^b is *loaded* truck weight in tonnes,
+    # i.e. empty_weight_tonnes + EquipmentActivity.tonnage. tire_*
+    # fields are an alternative emission proxy for haul-truck dust
+    # generation when AP-42 is unsuitable. All nullable — back-fill
+    # comes from manufacturer specs (Komatsu 930E etc.) or operator
+    # data once partnership lands.
+    empty_weight_tonnes: Mapped[float | None] = mapped_column(Float, nullable=True)
+    tire_contact_area_m2: Mapped[float | None] = mapped_column(Float, nullable=True)
+    tire_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    axle_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
 
     mine: Mapped[Mine] = relationship(back_populates="equipment")
