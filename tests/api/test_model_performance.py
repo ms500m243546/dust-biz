@@ -114,9 +114,10 @@ def _good_protocol_body() -> dict[str, object]:
         ],
         "sinca_validated_legal_only_after_days": 7,
         "realtime_proxy_required": True,
-        "protocol_version": "M.1",
+        "protocol_version": "M.4",
         "intended_for_realtime": True,
-        "notes": "test",
+        "max_ece": 1.0,
+        "notes": "test fixture: max_ece=1.0 disables M.4.1 gate",
     }
 
 
@@ -141,8 +142,9 @@ def test_evaluate_persists_metric_row(
     assert row["metric_payload"]["observed_count"] == 1
     # 0.85 >= 0.5 + breach_actual=True -> TP
     assert row["metric_payload"]["breach_precision"] == 1.0
-    # M.1: protocol block persisted on the metric row.
-    assert row["metric_payload"]["protocol"]["protocol_version"] == "M.1"
+    # M.1+: protocol block persisted on the metric row (M.4 after the
+    # calibration / covariate fields landed in M.4.1).
+    assert row["metric_payload"]["protocol"]["protocol_version"] == "M.4"
     assert row["metric_payload"]["protocol"]["split_strategy"] == "walk_forward"
 
 

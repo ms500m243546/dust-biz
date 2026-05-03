@@ -22,6 +22,8 @@ A model evaluation is **valid** only if all of:
 5. **Pre-registered.** The protocol object is hashed (`protocol_hash` = SHA-256 of canonical-JSON of the immutable fields) and the hash is recorded in `model_performance_metrics.metric_payload.protocol_hash` before evaluation runs. Hash mismatch on re-eval = pre-registration violation.
 6. **Operationally meaningful metrics required.** `metric_payload` must contain: `breach_precision`, `breach_recall`, `false_positive_rate`, `false_negative_rate`, `calibration_error`. MAE alone is not sufficient.
 7. **Geographic-generalization claims are blocked while `station_count < 2`.** A model trained on one station cannot claim it generalizes to other receptors. Cross-station claims require leave-one-station-out CV.
+8. **Calibration acceptance gate (M.4.1).** Expected Calibration Error (10-bin reliability) must be `≤ protocol.max_ece` (default **0.05**). Violations raise `ProtocolViolation` and persist nothing unless the protocol carries a non-empty `ece_override_reason` — the override is logged on the metric row as a warning so an auditor can find every gate-bypass after the fact. `metric_payload` now also persists `calibration_bins[]` (one entry per 10% bin: `lower`, `upper`, `count`, `avg_predicted`, `actual_frequency`) and the Brier score so the reliability diagram is reproducible from the audit row alone.
+9. **Covariate discipline (M.4.1).** The protocol declares the actual `feature_set` used by the model plus optional `required_covariates` and `forbidden_covariates`. Required entries must appear in `feature_set`; forbidden ones must not. All three lists are part of `protocol_hash`, so swapping features without updating the pre-registration is detectable. Use `forbidden_covariates` to lock out post-intervention or hindsight features (e.g. `validated_pm10_col3`); use `required_covariates` to lock in confounders flagged in `docs/bias-register.md` (e.g. `humidity` for B-18 mitigation).
 
 ## Failure mode
 
@@ -55,14 +57,13 @@ If MAE wins but operational metrics lose to a baseline, the candidate loses. MAE
 ## What this protocol does NOT cover
 
 - **Hindsight bias** (using info that wasn't knowable at decision-time): see `docs/anti-hindsight-protocol.md`.
-- **Concept drift / regime change:** a clean backtest on 2014 data is not evidence the model works in 2026. Drift watch is M.4.
+- **Concept drift / regime change:** a clean backtest on 2014 data is not evidence the model works in 2026. Drift watch is M.4.3.
 - **Causal/treatment-effect contamination:** historical PM10 reflects the post-intervention world. Causal layer is M.3.
-- **Confidence calibration enforcement:** M.4.
-- **Goodhart's law on deployed metrics:** M.4.
-- **Receptor fairness (Cuncumén-vs-Caimanes priority asymmetry):** M.4.
+- **Goodhart's law on deployed metrics:** M.4.2.
+- **Receptor fairness (Cuncumén-vs-Caimanes priority asymmetry):** M.4.2.
 
 The full bias surface is enumerated in `docs/bias-register.md`.
 
 ## Protocol version
 
-Current: **M.1** (lands 2026-05-02). Pre-M.1 metric rows are tagged `protocol_version="pre-M"` and excluded from the gate.
+Current: **M.4** (rules 8 + 9 added 2026-05-03). M.1 was the original split-discipline + baselines + sealed-test contract; M.4 extends with calibration + covariate discipline. Pre-M.1 metric rows are tagged `protocol_version="pre-M"` and excluded from the gate. M.1/M.2/M.3 rows persisted before M.4.1 are still legal but the validator emits a warning so the operator knows which rows still need re-evaluation under the calibration gate.

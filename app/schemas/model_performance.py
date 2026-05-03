@@ -66,9 +66,14 @@ class EvaluationProtocolSchema(BaseModel):
     )
     sinca_validated_legal_only_after_days: int = Field(default=7, ge=0, le=90)
     realtime_proxy_required: bool = True
-    protocol_version: str = "M.1"
+    protocol_version: str = "M.4"
     intended_for_realtime: bool = True
     causal_intent: bool = False
+    feature_set: list[str] = Field(default_factory=list)
+    required_covariates: list[str] = Field(default_factory=list)
+    forbidden_covariates: list[str] = Field(default_factory=list)
+    max_ece: float = Field(default=0.05, ge=0.0, le=1.0)
+    ece_override_reason: str = ""
     notes: str = ""
 
 

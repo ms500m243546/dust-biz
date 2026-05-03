@@ -108,6 +108,11 @@ def evaluate(
         protocol_version=payload.protocol.protocol_version,
         intended_for_realtime=payload.protocol.intended_for_realtime,
         causal_intent=payload.protocol.causal_intent,
+        feature_set=tuple(payload.protocol.feature_set),
+        required_covariates=tuple(payload.protocol.required_covariates),
+        forbidden_covariates=tuple(payload.protocol.forbidden_covariates),
+        max_ece=payload.protocol.max_ece,
+        ece_override_reason=payload.protocol.ece_override_reason,
         notes=payload.protocol.notes,
     )
     repo = ModelPerformanceMetricRepository(session)

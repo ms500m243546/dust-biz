@@ -53,7 +53,12 @@ REQUIRED_METRIC_KEYS: tuple[str, ...] = (
 # Forbidden — random k-fold leaks the future into the past.
 FORBIDDEN_SPLIT_STRATEGIES: tuple[str, ...] = ("random_kfold", "kfold", "shuffle")
 
-PROTOCOL_VERSION = "M.1"
+# M.4.1 calibration acceptance gate (anti-overfit rule 8). The strict
+# default — overrideable via `EvaluationProtocol.ece_override_reason`,
+# which is logged as a warning on the metric row.
+DEFAULT_MAX_ECE = 0.05
+
+PROTOCOL_VERSION = "M.4"
 
 
 class ProtocolViolation(Exception):
@@ -97,6 +102,22 @@ class EvaluationProtocol:
     # evaluation time per docs/causal-protocol.md).
     causal_intent: bool = False
 
+    # M.4.1 — covariate discipline (anti-overfit rule 9). The model
+    # declares the feature set it actually used; required/forbidden
+    # lists are cross-checked at validate time. All three are part of
+    # the hashed protocol so a feature swap requires a new
+    # pre-registration.
+    feature_set: tuple[str, ...] = ()
+    required_covariates: tuple[str, ...] = ()
+    forbidden_covariates: tuple[str, ...] = ()
+
+    # M.4.1 — calibration acceptance gate (anti-overfit rule 8).
+    # ECE > max_ece blocks evaluation unless `ece_override_reason` is
+    # a non-empty string (the reason is logged on the metric row for
+    # audit). max_ece is part of the hash; the override reason is not.
+    max_ece: float = DEFAULT_MAX_ECE
+    ece_override_reason: str = field(default="")
+
     # Free-form notes — not part of the hash; for audit messages.
     notes: str = field(default="")
 
@@ -125,6 +146,10 @@ class EvaluationProtocol:
             "protocol_version": self.protocol_version,
             "intended_for_realtime": self.intended_for_realtime,
             "causal_intent": self.causal_intent,
+            "feature_set": list(self.feature_set),
+            "required_covariates": list(self.required_covariates),
+            "forbidden_covariates": list(self.forbidden_covariates),
+            "max_ece": self.max_ece,
         }
         as_json = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(as_json.encode("utf-8")).hexdigest()
@@ -216,6 +241,34 @@ def validate_protocol_obeyed(
             "been used. Sealed test windows are one-shot per protocol; "
             "bump protocol_version and use a new sealed window."
         )
+
+    # Rule 9 (M.4.1) — covariate discipline. Required covariates must
+    # appear in the declared feature_set; forbidden ones must not.
+    # Cross-check is purely declarative: we trust the protocol object
+    # to be honest about what features the model used. The hash on
+    # feature_set guarantees no silent post-hoc swap.
+    if protocol.required_covariates or protocol.forbidden_covariates:
+        feature_set = set(protocol.feature_set)
+        missing_required = [
+            c for c in protocol.required_covariates if c not in feature_set
+        ]
+        if missing_required:
+            errors.append(
+                "anti-overfit rule 9: protocol declares required_covariates "
+                f"{list(protocol.required_covariates)} but feature_set is "
+                f"missing: {missing_required}. Add the covariate or drop "
+                "the requirement (per docs/anti-overfit-protocol.md)."
+            )
+        present_forbidden = [
+            c for c in protocol.forbidden_covariates if c in feature_set
+        ]
+        if present_forbidden:
+            errors.append(
+                "anti-overfit rule 9: protocol declares forbidden_covariates "
+                f"{list(protocol.forbidden_covariates)} but feature_set "
+                f"contains: {present_forbidden}. Remove the covariate or "
+                "drop the prohibition (per docs/anti-overfit-protocol.md)."
+            )
 
     # Rule 7 — geographic-generalization claims blocked at single-station.
     if station_count < 2 and not protocol.intended_for_realtime:
@@ -418,10 +471,15 @@ def protocol_to_payload_keys(protocol: EvaluationProtocol) -> dict[str, object]:
         "intended_for_realtime": protocol.intended_for_realtime,
         "realtime_proxy_required": protocol.realtime_proxy_required,
         "causal_intent": protocol.causal_intent,
+        "feature_set": list(protocol.feature_set),
+        "required_covariates": list(protocol.required_covariates),
+        "forbidden_covariates": list(protocol.forbidden_covariates),
+        "max_ece": protocol.max_ece,
     }
 
 
 __all__ = [
+    "DEFAULT_MAX_ECE",
     "FORBIDDEN_SPLIT_STRATEGIES",
     "PROTOCOL_VERSION",
     "REQUIRED_BASELINES",

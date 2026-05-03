@@ -41,6 +41,10 @@ const ALLOWED_SPLITS = new Set([
   'sealed_test',
 ]);
 
+// Protocol versions that include the M.4.1 calibration + covariate
+// fields. Rows persisted under earlier versions skip those checks.
+const M4_PROTOCOL_VERSIONS = new Set(['M.4']);
+
 function pythonExe() {
   // Prefer the repo-local venv, fall back to PATH python.
   const venvPy = path.join(ROOT, '.venv', 'Scripts', 'python.exe');
@@ -94,7 +98,9 @@ function main() {
   const errors = [];
   let preM1 = 0;
   let postM1 = 0;
+  let postM4 = 0;
   let sealedSeen = 0;
+  let eceOverrides = 0;
 
   for (const row of rows) {
     let payload = row.metric_payload;
@@ -154,6 +160,69 @@ function main() {
       );
     }
     if (protocol.sealed_test_used) sealedSeen += 1;
+
+    // M.4.1 — calibration + covariate discipline. Required only for
+    // rows tagged with an M.4 protocol_version. M.1/M.2/M.3 rows are
+    // tolerated (they predate the rule).
+    if (M4_PROTOCOL_VERSIONS.has(protocol.protocol_version)) {
+      postM4 += 1;
+      if (typeof protocol.max_ece !== 'number') {
+        errors.push(
+          `metric_id=${row.metric_id}: protocol.max_ece missing or non-numeric (M.4 requirement)`
+        );
+      }
+      for (const key of ['feature_set', 'required_covariates', 'forbidden_covariates']) {
+        if (!Array.isArray(protocol[key])) {
+          errors.push(
+            `metric_id=${row.metric_id}: protocol.${key} must be an array (M.4 requirement)`
+          );
+        }
+      }
+      if (!Array.isArray(payload.calibration_bins)) {
+        errors.push(
+          `metric_id=${row.metric_id}: metric_payload.calibration_bins missing or non-array (anti-overfit rule 8)`
+        );
+      }
+      // ece may be null when observed_count=0; otherwise it must be a number.
+      if (
+        payload.observed_count > 0 &&
+        typeof payload.ece !== 'number'
+      ) {
+        errors.push(
+          `metric_id=${row.metric_id}: metric_payload.ece missing on a row with observed_count=${payload.observed_count}`
+        );
+      }
+      if (
+        payload.observed_count > 0 &&
+        typeof payload.brier_score !== 'number'
+      ) {
+        errors.push(
+          `metric_id=${row.metric_id}: metric_payload.brier_score missing on a row with observed_count=${payload.observed_count}`
+        );
+      }
+      // ECE acceptance gate cross-check: if ece > max_ece, the row
+      // must carry an override warning (the gate would have raised
+      // otherwise — this catches manually-inserted rows).
+      if (
+        typeof payload.ece === 'number' &&
+        typeof protocol.max_ece === 'number' &&
+        payload.ece > protocol.max_ece
+      ) {
+        const warnings = Array.isArray(protocol.warnings)
+          ? protocol.warnings
+          : [];
+        const hasOverride = warnings.some((w) =>
+          /calibration acceptance gate overridden/.test(String(w))
+        );
+        if (!hasOverride) {
+          errors.push(
+            `metric_id=${row.metric_id}: ece=${payload.ece} > max_ece=${protocol.max_ece} but no override warning recorded (anti-overfit rule 8)`
+          );
+        } else {
+          eceOverrides += 1;
+        }
+      }
+    }
   }
 
   if (errors.length > 0) {
@@ -163,8 +232,9 @@ function main() {
 
   console.log(
     `overfit-discipline: ${rows.length} metric row(s) scanned; ` +
-      `${postM1} M.1+ protocol-tagged, ${preM1} pre-M.1 (permitted), ` +
-      `${sealedSeen} sealed-test runs`
+      `${postM1} M.1+ protocol-tagged (${postM4} under M.4 calibration gate), ` +
+      `${preM1} pre-M.1 (permitted), ${sealedSeen} sealed-test runs, ` +
+      `${eceOverrides} ECE-gate overrides`
   );
   process.exit(0);
 }

@@ -48,9 +48,67 @@ if TYPE_CHECKING:
 
 BREACH_DECISION_THRESHOLD = 0.5
 
+# M.4.1 — reliability-table bin count. 10 equal-width bins is standard
+# for ECE / reliability-diagram reporting (Niculescu-Mizil & Caruana
+# 2005). Independent of the operational decision threshold.
+CALIBRATION_BIN_COUNT = 10
+
 
 def _safe_div(num: float, den: float) -> float | None:
     return None if den == 0 else num / den
+
+
+def _calibration_breakdown(
+    pairs: list[tuple[float, bool]],
+    *,
+    bin_count: int = CALIBRATION_BIN_COUNT,
+) -> tuple[list[dict[str, float | int]], float, float]:
+    """Compute reliability bins, expected calibration error, and Brier score.
+
+    `pairs` is a list of `(predicted_breach_probability, breach_actual)`
+    over observed records only. Returns:
+      - `bins`: list of one dict per bin with keys
+        `lower`, `upper`, `count`, `avg_predicted`, `actual_frequency`.
+        Empty bins are emitted with `count=0` and null-but-numeric
+        averages (0.0) so the wire shape stays stable for the UI.
+      - `ece`: weighted absolute deviation across bins.
+      - `brier`: mean squared error on (probability vs realized).
+    """
+    if not pairs:
+        return [], 0.0, 0.0
+
+    width = 1.0 / bin_count
+    buckets: list[list[tuple[float, bool]]] = [[] for _ in range(bin_count)]
+    for prob, actual in pairs:
+        idx = min(int(prob / width), bin_count - 1)
+        buckets[idx].append((prob, actual))
+
+    bins: list[dict[str, float | int]] = []
+    total = len(pairs)
+    ece_terms = 0.0
+    for i, bucket in enumerate(buckets):
+        lower = i * width
+        upper = (i + 1) * width
+        count = len(bucket)
+        if count:
+            avg_pred = sum(p for p, _ in bucket) / count
+            actual_freq = sum(1 for _, a in bucket if a) / count
+            ece_terms += (count / total) * abs(avg_pred - actual_freq)
+        else:
+            avg_pred = 0.0
+            actual_freq = 0.0
+        bins.append(
+            {
+                "lower": lower,
+                "upper": upper,
+                "count": count,
+                "avg_predicted": avg_pred,
+                "actual_frequency": actual_freq,
+            }
+        )
+
+    brier = sum((p - (1.0 if a else 0.0)) ** 2 for p, a in pairs) / total
+    return bins, ece_terms, brier
 
 
 def compute_metric_payload(
@@ -104,6 +162,9 @@ def compute_metric_payload(
             "false_positive_rate": None,
             "false_negative_rate": None,
             "calibration_error": None,
+            "calibration_bins": [],
+            "ece": None,
+            "brier_score": None,
             "avoided_shutdowns_estimate": 0,
             "production_loss_tonnes_total": 0.0,
             "protocol": protocol_block,
@@ -111,6 +172,7 @@ def compute_metric_payload(
 
     abs_errors_pm10: list[float] = []
     cal_terms: list[float] = []
+    calibration_pairs: list[tuple[float, bool]] = []
     tp = fp = tn = fn = 0
     avoided = 0
     production_loss_total = 0.0
@@ -123,6 +185,7 @@ def compute_metric_payload(
         cal_terms.append(
             abs(r.predicted_breach_probability - (1.0 if breach_actual else 0.0))
         )
+        calibration_pairs.append((r.predicted_breach_probability, breach_actual))
         if breach_predicted and breach_actual:
             tp += 1
         elif breach_predicted and not breach_actual:
@@ -135,6 +198,25 @@ def compute_metric_payload(
             tn += 1
         if r.production_loss_tonnes_actual is not None:
             production_loss_total += r.production_loss_tonnes_actual
+
+    calibration_bins, ece, brier = _calibration_breakdown(calibration_pairs)
+
+    # M.4.1 — calibration acceptance gate. ECE > max_ece blocks
+    # evaluation unless the protocol carries a non-empty
+    # `ece_override_reason` (logged on the metric row).
+    if ece > protocol.max_ece:
+        if not protocol.ece_override_reason.strip():
+            raise ProtocolViolation(
+                f"calibration acceptance gate (anti-overfit rule 8): "
+                f"ECE={ece:.4f} > max_ece={protocol.max_ece:.4f}. "
+                "Either recalibrate the model (Platt / isotonic) or set "
+                "`ece_override_reason` with explicit operator sign-off."
+            )
+        protocol_block["warnings"].append(
+            f"calibration acceptance gate overridden: ECE={ece:.4f} "
+            f"> max_ece={protocol.max_ece:.4f}; "
+            f"reason={protocol.ece_override_reason!r}"
+        )
 
     return {
         "sample_count": len(records),
@@ -152,10 +234,17 @@ def compute_metric_payload(
         "calibration_error": (
             sum(cal_terms) / len(cal_terms) if cal_terms else None
         ),
+        "calibration_bins": calibration_bins,
+        "ece": ece,
+        "brier_score": brier,
         "avoided_shutdowns_estimate": avoided,
         "production_loss_tonnes_total": production_loss_total,
         "protocol": protocol_block,
     }
 
 
-__all__ = ["BREACH_DECISION_THRESHOLD", "compute_metric_payload"]
+__all__ = [
+    "BREACH_DECISION_THRESHOLD",
+    "CALIBRATION_BIN_COUNT",
+    "compute_metric_payload",
+]

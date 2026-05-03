@@ -155,6 +155,11 @@ def test_protocol_to_payload_keys_includes_required_fields() -> None:
     assert payload["split_strategy"] == "walk_forward"
     assert payload["sealed_test_used"] is False
     assert payload["baselines_named"] == list(REQUIRED_BASELINES)
+    # M.4.1 fields persist on the metric row.
+    assert payload["max_ece"] == 0.05
+    assert payload["feature_set"] == []
+    assert payload["required_covariates"] == []
+    assert payload["forbidden_covariates"] == []
 
 
 def test_test_window_to_must_be_after_test_window_from() -> None:
@@ -186,3 +191,68 @@ def test_train_to_after_validation_from_is_rejected() -> None:
     )
     result = validate_protocol_obeyed(protocol)
     assert not result.ok
+
+
+# ---------------------------------------------------------------------------
+# M.4.1 — covariate-discipline rule 9.
+# ---------------------------------------------------------------------------
+
+
+def test_required_covariate_missing_is_rejected() -> None:
+    protocol = _good_protocol(
+        feature_set=("pm10_lag1", "wind_speed"),
+        required_covariates=("pm10_lag1", "humidity"),
+    )
+    result = validate_protocol_obeyed(protocol)
+    assert any(
+        "rule 9" in e and "humidity" in e for e in result.errors
+    ), result.errors
+
+
+def test_forbidden_covariate_present_is_rejected() -> None:
+    protocol = _good_protocol(
+        feature_set=("pm10_lag1", "post_intervention_pm10"),
+        forbidden_covariates=("post_intervention_pm10",),
+    )
+    result = validate_protocol_obeyed(protocol)
+    assert any(
+        "rule 9" in e and "post_intervention_pm10" in e
+        for e in result.errors
+    ), result.errors
+
+
+def test_covariate_lists_satisfied_is_clean() -> None:
+    protocol = _good_protocol(
+        feature_set=("pm10_lag1", "humidity", "wind_speed"),
+        required_covariates=("pm10_lag1", "humidity"),
+        forbidden_covariates=("post_intervention_pm10",),
+    )
+    result = validate_protocol_obeyed(protocol)
+    assert all("rule 9" not in e for e in result.errors), result.errors
+
+
+def test_empty_covariate_lists_are_no_op() -> None:
+    """Default = no covariate constraints; the probe must not fire."""
+    protocol = _good_protocol()  # feature_set, required, forbidden all empty
+    result = validate_protocol_obeyed(protocol)
+    assert all("rule 9" not in e for e in result.errors), result.errors
+
+
+def test_feature_set_changes_change_protocol_hash() -> None:
+    """Anti-overfit rule 9: feature set is part of pre-registration."""
+    p1 = _good_protocol(feature_set=("pm10_lag1",))
+    p2 = _good_protocol(feature_set=("pm10_lag1", "humidity"))
+    assert p1.protocol_hash != p2.protocol_hash
+
+
+def test_max_ece_changes_change_protocol_hash() -> None:
+    p1 = _good_protocol(max_ece=0.05)
+    p2 = _good_protocol(max_ece=0.10)
+    assert p1.protocol_hash != p2.protocol_hash
+
+
+def test_ece_override_reason_does_not_change_hash() -> None:
+    """Override reason is an audit annotation — like notes, not hashed."""
+    p1 = _good_protocol(ece_override_reason="")
+    p2 = _good_protocol(ece_override_reason="operator sign-off 2026-05-03")
+    assert p1.protocol_hash == p2.protocol_hash

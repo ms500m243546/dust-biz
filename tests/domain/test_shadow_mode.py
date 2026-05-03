@@ -20,7 +20,12 @@ from app.storage.models import (
 
 
 def _good_protocol() -> EvaluationProtocol:
-    """Minimal valid M.1 protocol for shadow-mode tests."""
+    """Minimal valid protocol for shadow-mode tests.
+
+    `max_ece=1.0` disables the M.4.1 calibration acceptance gate so
+    tests built around contrived breach-precision fixtures don't trip
+    on uncalibrated probabilities.
+    """
     return EvaluationProtocol(
         split_strategy="walk_forward",
         train_window_from=datetime(2025, 1, 1),
@@ -30,6 +35,7 @@ def _good_protocol() -> EvaluationProtocol:
         test_window_from=datetime(2025, 9, 8),
         test_window_to=datetime(2026, 3, 1),
         baselines_named=REQUIRED_BASELINES,
+        max_ece=1.0,
     )
 
 

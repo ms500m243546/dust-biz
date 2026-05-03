@@ -187,6 +187,7 @@ def test_full_pipeline_produces_persisted_metric_row(session: Session) -> None:
         test_window_from=datetime(2025, 9, 8),
         test_window_to=datetime(2026, 3, 1),
         baselines_named=REQUIRED_BASELINES,
+        max_ece=1.0,  # contrived heuristic fixture, not calibration-tuned
     )
     payload = compute_metric_payload(records, protocol=protocol)
     assert payload["sample_count"] == 3

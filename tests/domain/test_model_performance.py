@@ -1,20 +1,32 @@
-"""Model-performance aggregation tests (Phase K)."""
+"""Model-performance aggregation tests (Phase K + M.4.1 calibration gate)."""
 
 from __future__ import annotations
 
 from datetime import datetime
 
+import pytest
+
 from app.domain.evaluation_protocol import (
     REQUIRED_BASELINES,
     EvaluationProtocol,
+    ProtocolViolation,
 )
-from app.domain.model_performance import compute_metric_payload
+from app.domain.model_performance import (
+    CALIBRATION_BIN_COUNT,
+    compute_metric_payload,
+)
 from app.schemas.model_performance import TrainingRecordSchema
 
 
-def _good_protocol() -> EvaluationProtocol:
-    """Minimal valid M.1 protocol for unit tests of compute_metric_payload."""
-    return EvaluationProtocol(
+def _good_protocol(**overrides: object) -> EvaluationProtocol:
+    """Minimal valid protocol for unit tests of compute_metric_payload.
+
+    Defaults `max_ece=1.0` so legacy tests that weren't built around
+    calibrated probabilities don't trip the M.4.1 acceptance gate.
+    Calibration-specific tests override `max_ece` and provide an
+    `ece_override_reason` (or honest probabilities).
+    """
+    base: dict[str, object] = dict(
         split_strategy="walk_forward",
         train_window_from=datetime(2025, 1, 1),
         train_window_to=datetime(2025, 6, 1),
@@ -23,7 +35,10 @@ def _good_protocol() -> EvaluationProtocol:
         test_window_from=datetime(2025, 9, 8),
         test_window_to=datetime(2026, 3, 1),
         baselines_named=REQUIRED_BASELINES,
+        max_ece=1.0,  # disable gate for legacy fixtures
     )
+    base.update(overrides)
+    return EvaluationProtocol(**base)  # type: ignore[arg-type]
 
 
 def _record(
@@ -143,4 +158,74 @@ def test_empty_input() -> None:
     payload = compute_metric_payload([], protocol=_good_protocol())
     assert payload["sample_count"] == 0
     assert payload["mae_pm10"] is None
-    assert payload["protocol"]["protocol_version"] == "M.1"
+    assert payload["protocol"]["protocol_version"] == "M.4"
+
+
+# ---------------------------------------------------------------------------
+# M.4.1 — calibration acceptance gate (anti-overfit rule 8).
+# ---------------------------------------------------------------------------
+
+
+def test_calibration_bins_emitted_with_stable_shape() -> None:
+    records = [
+        _record(breach_prob=0.95, breach_actual=True),
+        _record(breach_prob=0.05, breach_actual=False),
+    ]
+    payload = compute_metric_payload(records, protocol=_good_protocol())
+    bins = payload["calibration_bins"]
+    assert isinstance(bins, list)
+    # Always 10 bins, even when most are empty — wire shape is stable.
+    assert len(bins) == CALIBRATION_BIN_COUNT
+    # Bin 0 (0.0-0.1) holds prob=0.05; bin 9 (0.9-1.0) holds prob=0.95.
+    assert bins[0]["count"] == 1
+    assert bins[9]["count"] == 1
+    assert sum(b["count"] for b in bins) == 2
+
+
+def test_perfectly_calibrated_yields_zero_ece() -> None:
+    # All predictions match outcomes exactly at the bin centre.
+    records = [
+        _record(breach_prob=1.0, breach_actual=True, actual_pm10=130),
+        _record(breach_prob=0.0, breach_actual=False, actual_pm10=70),
+    ]
+    payload = compute_metric_payload(records, protocol=_good_protocol())
+    assert payload["ece"] == pytest.approx(0.0)
+    assert payload["brier_score"] == pytest.approx(0.0)
+
+
+def test_uncalibrated_blocks_evaluation_without_override() -> None:
+    """An over-confident model with no override reason raises 422."""
+    # Predict 0.9 every time, but breach only half the time → ECE = 0.4.
+    records = [
+        _record(breach_prob=0.9, breach_actual=True, actual_pm10=130),
+        _record(breach_prob=0.9, breach_actual=False, actual_pm10=80),
+    ]
+    strict = _good_protocol(max_ece=0.05)
+    with pytest.raises(ProtocolViolation, match="calibration acceptance gate"):
+        compute_metric_payload(records, protocol=strict)
+
+
+def test_uncalibrated_with_override_reason_persists_warning() -> None:
+    records = [
+        _record(breach_prob=0.9, breach_actual=True),
+        _record(breach_prob=0.9, breach_actual=False),
+    ]
+    overridden = _good_protocol(
+        max_ece=0.05,
+        ece_override_reason="diagnostic run only — not promoted",
+    )
+    payload = compute_metric_payload(records, protocol=overridden)
+    assert any(
+        "calibration acceptance gate overridden" in w
+        for w in payload["protocol"]["warnings"]
+    )
+
+
+def test_brier_score_squared_error_arithmetic() -> None:
+    # Two records: pred 0.8 vs actual 1 (err 0.04), pred 0.3 vs actual 0 (err 0.09).
+    records = [
+        _record(breach_prob=0.8, breach_actual=True),
+        _record(breach_prob=0.3, breach_actual=False),
+    ]
+    payload = compute_metric_payload(records, protocol=_good_protocol())
+    assert payload["brier_score"] == pytest.approx((0.04 + 0.09) / 2)

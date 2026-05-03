@@ -4,7 +4,7 @@ The full bias / integrity-hazard surface for DustOps, ranked by current exposure
 
 This is a living document. New biases are appended; mitigated biases stay listed (with their mitigation phase) so the audit trail is complete. Every architect-protocol planning response (per `docs/architect_protocol.md` §3) must scan this register and call out which entries the proposed change touches.
 
-Last reviewed: **2026-05-03 (Phase M.3.1)**.
+Last reviewed: **2026-05-03 (Phase M.4.1)**.
 
 ---
 
@@ -52,7 +52,7 @@ Last reviewed: **2026-05-03 (Phase M.3.1)**.
 |---|---|---|---|---|---|---|
 | B-16 | Causal | Treatment-effect contamination — historical PM10 reflects the post-intervention world (operators already watered roads, slowed trucks). Model learns "given the operator reacted" not "if no one acted." | High | M.3.1 (disclosure) + M.3.3 (true cutoff via operator-real timestamps) | **Mitigated-via-disclosure (M.3.1)** | `pit_query.features_pre_intervention` filter + `InterventionSimulation.counterfactual_assumption` required + naive-simulation confidence cap 0.7. True causal mitigation deferred to RCT data. |
 | B-17 | Causal | Reverse causality — operator slows trucks because PM10 spiked → model could learn "slow trucks → high PM10" backwards | Medium | M.3.1 | **Mitigated-via-filter (M.3.1)** | `pit_query.features_pre_intervention` excludes feature rows inside operator-approval windows. |
-| B-18 | Causal | Confounding — dry day → both trucks busy AND PM10 high; without conditioning on humidity, attribution goes to trucks | Medium | M.3.1 protocol + M.4 covariate-list enforcement | Open (documented) | `docs/causal-protocol.md` defines the rule; programmatic covariate-list enforcement in M.4. |
+| B-18 | Causal | Confounding — dry day → both trucks busy AND PM10 high; without conditioning on humidity, attribution goes to trucks | Medium | M.3.1 protocol + M.4.1 covariate-list enforcement | **Mitigated (M.4.1)** | `EvaluationProtocol.required_covariates / forbidden_covariates` enforced in `validate_protocol_obeyed`; `feature_set` is part of `protocol_hash` so covariate swaps trigger re-pre-registration. Models claiming to control for humidity must declare `required_covariates=("humidity", ...)` or fail anti-overfit rule 9. |
 | B-19 | Causal | Spurious correlation — patterns that exist in training but don't generalize | Medium | M.3.1 + M.4 (drift watch) | **Mitigated-via-disclosure (M.3.1)** | `evidence_class=observational_correlational` flagged on every attribution; downstream consumers see the class. M.4 adds drift watch for production catch. |
 | B-20 | Causal | Lack of counterfactual — we never observe "what if the operator did nothing"; S9 simulator must use causal graph or experimental design, not pure ML on history | High | M.3.1 disclosure + M.3.3 cutoff + post-M for true counterfactual | **Mitigated-via-disclosure (M.3.1)** | `simulation_method=naive_correlation` declared explicitly; `counterfactual_assumption` required; confidence capped. True counterfactual evidence requires RCT — out of scope for current data. |
 
@@ -74,7 +74,7 @@ Last reviewed: **2026-05-03 (Phase M.3.1)**.
 | B-27 | Reporting | Backtesting illusion — pitch deck shows the best fold; aggregate stats hide volatility | Medium | M.1 | Mitigated | Required to report distribution + worst fold per `docs/anti-overfit-protocol.md`. |
 | B-28 | Reporting | Significant-figure inflation — claiming "73.4% accuracy" when CI is ±15% | Low | M.4 | Deferred | Confidence-interval reporting. |
 | B-29 | Reporting | Stationarity claim — implicit assumption that future = past | High | M.4 | Deferred | Required disclaimer on every model report. |
-| B-30 | Reporting | Confidence miscalibration — when model says 80%, it should be right 80%; most ML models are over-confident | High | M.4 | Open | Calibration error already in metric_payload; M.4 enforces it. |
+| B-30 | Reporting | Confidence miscalibration — when model says 80%, it should be right 80%; most ML models are over-confident | High | M.4.1 | **Mitigated (M.4.1)** | Calibration acceptance gate (anti-overfit rule 8): `ECE ≤ protocol.max_ece` (default 0.05) is a hard `ProtocolViolation`. `metric_payload` persists `calibration_bins[]` + `brier_score` + `ece`; reliability diagram reproducible from the audit row. Override allowed only with explicit `ece_override_reason`, logged on the metric row. |
 | B-31 | Reporting | Simpson's paradox / aggregation paradox — model is great on station-average but bad on the station you actually deploy at | Medium | M.4 + M.3 | Deferred | Require per-receptor reporting. |
 
 ## Fairness biases (Chile RCA-specific)
