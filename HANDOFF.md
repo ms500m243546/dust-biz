@@ -1,8 +1,8 @@
 # DustOps AI — Session Handoff
 
 **As of:** 2026-05-03
-**Active phase:** Phase Q.3 complete — B-5 / B-6 / B-14 mitigated in code. Phase Q done. Autonomous P→Q→R→S batch continues with R.1 (AP-42 intervention model).
-**Last completed:** Q.3 — `_multi_station_caveats` emits `survivor_caveat` / `selection_caveat` / `cross_mine_eval` on every `metric_payload`; gate #22 (`validate-multi-station-discipline.js`) added.
+**Active phase:** Phase R.1 complete — AP-42 physics-informed intervention model landed. Watering + speed-reduction now grounded in EPA §13.2.2; other interventions stay heuristic. Autonomous P→Q→R→S continues with R.2 (calibration vs ActionOutcome / honest deferral).
+**Last completed:** R.1 — `app/domain/ap42_emission.py` pure functions + `app/models/intervention/ap42_v0_1_0.py:AP42InterventionImpact` registered alongside heuristic.
 **Validation gate:** `npm run agent-check` GREEN, **22 PASS / 0 SKIP / 0 FAIL**.
 
 ---

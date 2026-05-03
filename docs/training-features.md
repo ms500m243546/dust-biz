@@ -78,6 +78,27 @@ where:
 | `tire_count` | `equipment.tire_count` | schema-ready (Phase O.1); haul-truck default = 6 |
 | `axle_count` | `equipment.axle_count` | schema-ready (Phase O.1) |
 
+### AP-42 module (Phase R.1)
+
+The pure-function physics implementation lives in
+`app/domain/ap42_emission.py`. It exposes:
+
+- `emission_factor_lb_per_vmt(silt, weight, particle)` — the EPA
+  formula above, returning lb / vehicle-mile-traveled.
+- `speed_reduction_factor(before, after)` — the dimensionless
+  emission-reduction fraction from cutting haul-truck speed (AP-42
+  speed exponent 0.5).
+- `watering_decay_curve(minutes_since_watering, ...meteorology)` — the
+  empirical reduction-fraction-vs-time curve, parameterised by wind /
+  humidity / temperature so high-evaporation conditions shorten the
+  half-life.
+
+`AP42InterventionImpact` (`app/models/intervention/ap42_v0_1_0.py`)
+registers as a peer of the heuristic baseline and is selectable via
+`registry.get_current("intervention_impact")`. Phase R.1 runs the
+physics with documented defaults; calibration against `ActionOutcome`
+rows is Phase R.2.
+
 ### Per-mine back-fill convention
 
 When a new mine's fleet is configured, populate `empty_weight_tonnes`
