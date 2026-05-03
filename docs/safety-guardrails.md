@@ -148,6 +148,16 @@ A model is **not promoted to a higher automation level** unless its canary metri
 
 `metric_payload.per_receptor` carries the same headline metrics as the aggregate, split by `target_id`. Operators reviewing model performance must check that the worst-receptor metrics are within tolerance — an aggregate-good model can still be unfair to a specific receptor (Cuncumén-vs-Caimanes asymmetry, B-32). M.4.2 supplies the data; flagging logic for "worst-receptor breach rate exceeds threshold" is operator-side until M.4.3.
 
+## Multi-station discipline (Q.3)
+
+Every `metric_payload` row now carries three honest-caveat fields surfaced by `_multi_station_caveats` in `app/domain/model_performance.py`:
+
+- `survivor_caveat` — populated when fewer receptors are evaluated than the registered station population (B-5). Surfaces "metrics may reflect showcase stations rather than the population."
+- `selection_caveat` — populated when `per_receptor` spans <2 distinct mines (B-6). Cross-mine spread is the strongest data-only proxy for non-random sensor placement until receptor classification (community vs industrial) lands as a typed field.
+- `cross_mine_eval` — populated when the trained-on mine differs from any evaluated receptor's mine (B-14). Carries `{trained_on_mine, evaluated_on_mines, cross_mine_receptors, warning}`. Distribution-shift claim, not in-sample claim — UI must render the warning before the operator can act on cross-mine predictions.
+
+Trainer callers pass `trained_on_mine` to `compute_metric_payload`; the API model-performance route forwards it from the training-job metadata. Validator `validate-multi-station-discipline.js` (gate #22) asserts the three fields exist on every row.
+
 ---
 
 ## Mandatory audit list

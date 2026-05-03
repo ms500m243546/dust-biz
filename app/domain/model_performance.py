@@ -178,6 +178,101 @@ def _calibration_breakdown(
     return bins, ece_terms, brier
 
 
+# Phase Q.3 — multi-station discipline. The Q.3 caveat fields are
+# emitted on every metric_payload row. Empty / null values mean
+# "no caveat applies"; populated values are surfaced by the UI and
+# audit pipeline so an operator can see why a model was promoted (or
+# held back) before acting on its predictions.
+MIN_RECEPTORS_FOR_NO_SURVIVOR_CAVEAT = 2
+
+# Mine-of-record per receptor sensor_id. Drives B-6 (selection) +
+# B-14 (cross-mine eval) detection. New stations land here when their
+# data_seed/<mine>.yaml is added — keep in sync.
+RECEPTOR_TO_MINE: dict[str, str] = {
+    "lp-em05-cuncumen": "los-pelambres",
+    "lb-las-condes": "los-bronces",
+    "chq-club-23-marzo": "chuquicamata",
+    "chq-calama-centro": "chuquicamata",
+    "cnt-sierra-gorda": "centinela",
+}
+
+
+def _multi_station_caveats(
+    *,
+    per_receptor: dict[str, dict[str, Any]],
+    station_count: int,
+    trained_on_mine: str | None,
+) -> tuple[str | None, str | None, dict[str, Any] | None]:
+    """B-5 / B-6 / B-14 mitigation — surface honest caveats.
+
+    Returns (survivor_caveat, selection_caveat, cross_mine_eval).
+    Each is None when the corresponding bias does not apply to the
+    current evaluation; populated otherwise so the UI / audit
+    pipeline can render the warning verbatim.
+    """
+    receptors = list(per_receptor.keys())
+
+    # B-5 survivorship: fewer receptors evaluated than the registry
+    # claims should exist for the trained-on mine. We use
+    # station_count (caller-supplied) as the population denominator.
+    survivor_caveat: str | None = None
+    if (
+        len(receptors) < MIN_RECEPTORS_FOR_NO_SURVIVOR_CAVEAT
+        or len(receptors) < station_count
+    ):
+        survivor_caveat = (
+            f"B-5 — only {len(receptors)} receptor(s) evaluated; "
+            f"station_count={station_count}. Per-receptor metrics may "
+            "reflect 'showcase' stations rather than the population."
+        )
+
+    # B-6 selection: per_receptor must span ≥ 2 distinct mines for the
+    # evaluation to be considered geographically diverse. Until the
+    # receptor inventory carries community/industrial classification,
+    # cross-mine spread is the strongest data-only proxy we have.
+    receptor_mines = {
+        RECEPTOR_TO_MINE.get(sid)
+        for sid in receptors
+        if RECEPTOR_TO_MINE.get(sid) is not None
+    }
+    selection_caveat: str | None = None
+    if len(receptor_mines) < 2:
+        selection_caveat = (
+            "B-6 — per_receptor spans <2 distinct mines "
+            f"(found: {sorted(m for m in receptor_mines if m)}). "
+            "Selection bias likely; weighted/stratified analysis required "
+            "before extrapolating to other deployments."
+        )
+
+    # B-14 distribution shift: when the model's training mine differs
+    # from the evaluated receptor's mine, surface the cross-mine eval
+    # block so consumers know they're looking at a generalization
+    # claim rather than an in-sample claim.
+    cross_mine_eval: dict[str, Any] | None = None
+    if trained_on_mine is not None:
+        cross_pairs = [
+            (sid, RECEPTOR_TO_MINE.get(sid))
+            for sid in receptors
+            if RECEPTOR_TO_MINE.get(sid) is not None
+            and RECEPTOR_TO_MINE.get(sid) != trained_on_mine
+        ]
+        if cross_pairs:
+            cross_mine_eval = {
+                "trained_on_mine": trained_on_mine,
+                "evaluated_on_mines": sorted(
+                    {m for _, m in cross_pairs if m is not None}
+                ),
+                "cross_mine_receptors": [sid for sid, _ in cross_pairs],
+                "warning": (
+                    "B-14 — predictions on receptors outside the training "
+                    "mine are a distribution-shift claim; metrics on these "
+                    "receptors should be discounted vs in-sample receptors."
+                ),
+            }
+
+    return survivor_caveat, selection_caveat, cross_mine_eval
+
+
 def compute_metric_payload(
     records: list[TrainingRecordSchema],
     *,
@@ -185,6 +280,7 @@ def compute_metric_payload(
     station_count: int = 1,
     prior_metric_protocol_hashes: tuple[str, ...] = (),
     session: Session | None = None,
+    trained_on_mine: str | None = None,
 ) -> dict[str, Any]:
     """Aggregate observed records into the metric_payload JSON blob.
 
@@ -198,6 +294,11 @@ def compute_metric_payload(
     those rules emit warnings only (useful for unit tests). The API
     route always supplies the session so the gate is fully enforced
     in production paths.
+
+    Q.3 `trained_on_mine` (optional): when provided alongside multi-
+    receptor records, populates the `cross_mine_eval` block (B-14
+    distribution-shift mitigation). Pass None to suppress that
+    block (single-mine evaluation; no shift to declare).
     """
     validation = validate_protocol_obeyed(
         protocol,
@@ -219,6 +320,11 @@ def compute_metric_payload(
     unobserved_count = len(records) - len(observed)
 
     if not observed:
+        empty_caveats = _multi_station_caveats(
+            per_receptor={},
+            station_count=station_count,
+            trained_on_mine=trained_on_mine,
+        )
         return {
             "sample_count": len(records),
             "observed_count": 0,
@@ -236,6 +342,9 @@ def compute_metric_payload(
             "production_loss_tonnes_total": 0.0,
             "per_receptor": {},
             "canary_metrics": {},
+            "survivor_caveat": empty_caveats[0],
+            "selection_caveat": empty_caveats[1],
+            "cross_mine_eval": empty_caveats[2],
             "protocol": protocol_block,
         }
 
@@ -311,6 +420,12 @@ def compute_metric_payload(
         if canary in available
     }
 
+    per_receptor = _per_receptor_breakdown(observed)
+    survivor_caveat, selection_caveat, cross_mine_eval = _multi_station_caveats(
+        per_receptor=per_receptor,
+        station_count=station_count,
+        trained_on_mine=trained_on_mine,
+    )
     return {
         "sample_count": len(records),
         "observed_count": len(observed),
@@ -332,8 +447,11 @@ def compute_metric_payload(
         "brier_score": brier,
         "avoided_shutdowns_estimate": avoided,
         "production_loss_tonnes_total": production_loss_total,
-        "per_receptor": _per_receptor_breakdown(observed),
+        "per_receptor": per_receptor,
         "canary_metrics": canary_metrics,
+        "survivor_caveat": survivor_caveat,
+        "selection_caveat": selection_caveat,
+        "cross_mine_eval": cross_mine_eval,
         "protocol": protocol_block,
     }
 
@@ -342,5 +460,7 @@ __all__ = [
     "BREACH_DECISION_THRESHOLD",
     "CALIBRATION_BIN_COUNT",
     "GOODHART_CANARY_PAIRS",
+    "MIN_RECEPTORS_FOR_NO_SURVIVOR_CAVEAT",
+    "RECEPTOR_TO_MINE",
     "compute_metric_payload",
 ]

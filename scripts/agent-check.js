@@ -44,6 +44,7 @@ const CONTRACT_VALIDATORS = [
   { name: 'validate-hindsight-discipline', script: 'checks/validate-hindsight-discipline.js' },
   { name: 'validate-causal-discipline', script: 'checks/validate-causal-discipline.js' },
   { name: 'validate-drift-discipline',  script: 'checks/validate-drift-discipline.js' },
+  { name: 'validate-multi-station-discipline', script: 'checks/validate-multi-station-discipline.js' },
 ];
 
 // Boundary, safety, and diff inspectors (active from Phase B.5 onward)

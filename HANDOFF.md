@@ -1,9 +1,9 @@
 # DustOps AI — Session Handoff
 
 **As of:** 2026-05-03
-**Active phase:** Phase Q.2 complete — shared multi-station GBM landed. Single artifact handles all 5 stations via station_id one-hot; aggregate ECE 0.003, MAE 11.05. Autonomous P→Q→R→S batch continues with Q.3 (B-5 / B-6 / B-14 mitigations).
-**Last completed:** Q.2 — `GBMSharedForecaster` + `train_shared_multi_station()` + `--shared` CLI flag.
-**Validation gate:** `npm run agent-check` GREEN, **21 PASS / 0 SKIP / 0 FAIL**.
+**Active phase:** Phase Q.3 complete — B-5 / B-6 / B-14 mitigated in code. Phase Q done. Autonomous P→Q→R→S batch continues with R.1 (AP-42 intervention model).
+**Last completed:** Q.3 — `_multi_station_caveats` emits `survivor_caveat` / `selection_caveat` / `cross_mine_eval` on every `metric_payload`; gate #22 (`validate-multi-station-discipline.js`) added.
+**Validation gate:** `npm run agent-check` GREEN, **22 PASS / 0 SKIP / 0 FAIL**.
 
 ---
 
