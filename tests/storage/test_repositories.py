@@ -65,9 +65,23 @@ def test_weather_reading_repo_zone_filter(session: Session) -> None:
     repo = WeatherReadingRepository(session)
     now = datetime.now(UTC)
     repo.add(
-        WeatherReading(source="onsite", zone_id="Haul_Road_C", timestamp=now, wind_speed_ms=14.2)
+        WeatherReading(
+            source="onsite",
+            zone_id="Haul_Road_C",
+            timestamp=now,
+            wind_speed_ms=14.2,
+            weather_target_id="zone-haul-road-c",
+        )
     )
-    repo.add(WeatherReading(source="onsite", zone_id=None, timestamp=now, wind_speed_ms=10.0))
+    repo.add(
+        WeatherReading(
+            source="onsite",
+            zone_id=None,
+            timestamp=now,
+            wind_speed_ms=10.0,
+            weather_target_id="site-wide",
+        )
+    )
 
     zone_only = repo.get_recent_for_zone("Haul_Road_C", since=now - timedelta(minutes=1))
     assert len(zone_only) == 1

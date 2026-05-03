@@ -19,6 +19,11 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.storage.models.base import Base
 
 
+def _default_labeled_at_from_issued(context: Any) -> datetime:
+    issued_at: datetime = context.get_current_parameters()["issued_at"]
+    return issued_at
+
+
 class SourceAttribution(Base):
     __tablename__ = "source_attributions"
 
@@ -34,3 +39,28 @@ class SourceAttribution(Base):
     evidence_fields: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
     confidence: Mapped[float] = mapped_column(Float, nullable=False)
     model_version: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    # M.2: anti-hindsight rules 3 + 4. Default `labeled_at = issued_at`
+    # (context-aware). `derivation` distinguishes realtime model
+    # output from post-event analysis (the latter is evaluation-only
+    # and cannot be used as a training feature).
+    labeled_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        default=_default_labeled_at_from_issued,
+        index=True,
+    )
+    derivation: Mapped[str] = mapped_column(
+        String, nullable=False, default="realtime_predicted", index=True
+    )
+    # M.3: causal-protocol rule 1. `evidence_class` describes the
+    # *kind of evidence* supporting the attribution claim. Realistic
+    # default for current single-station / observational data is
+    # `observational_correlational`. Stronger classes (`quasi_experimental`,
+    # `experimental`) require RCT-grade data we do not yet have.
+    # `expert_judgment` for RCA-derived labels is evaluation-only.
+    evidence_class: Mapped[str] = mapped_column(
+        String,
+        nullable=False,
+        default="observational_correlational",
+        index=True,
+    )

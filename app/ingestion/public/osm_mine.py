@@ -16,6 +16,12 @@ the dashboard footer once L.4 lands.
 
 Like the SINCA / weather connectors, this module is a pure parser.
 Tests use captured Overpass JSON; live network not used in CI.
+
+Realtime semantics: this is **static spatial data** (mine geometry
+that changes on quarter-to-year timescales), not a time series. The
+anti-hindsight protocol treats static spatial data as out-of-scope
+for realtime/reanalysis tagging; geometries are versioned by import
+date rather than by `realtime_proxy`.
 """
 
 from __future__ import annotations

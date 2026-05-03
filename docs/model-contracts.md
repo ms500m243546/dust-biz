@@ -201,12 +201,31 @@ optimization is not in scope for MVP.
 
 ## Model lifecycle
 
-1. **Train** offline (Phase K tooling).
+1. **Train** offline (Phase K tooling). Training data must obey
+   `docs/anti-hindsight-protocol.md` rules 1–4 (SINCA col-3 embargo,
+   ERA5 evaluation-only, labeled-at vs event-at, attribution
+   provenance).
 2. **Register** by writing a `model_versions` row.
 3. **Save** model artifacts under `app/models/artifacts/<version>/`.
 4. **Deploy** by setting the registry's "current" pointer for that
    `model_kind` (see `app/models/registry.py`).
 5. **Shadow-evaluate** new versions before promoting (S14 / Phase K).
+   Evaluation must obey the binding contract in
+   `docs/anti-overfit-protocol.md`: temporal split (no random k-fold),
+   embargo-separated train/validation/test, sealed test window opened
+   exactly once per `model_version`, and the candidate beats the
+   required baselines (persistence, seasonal-naive, regulatory
+   threshold) on operationally meaningful metrics. The
+   `EvaluateModelRequest` API + `compute_metric_payload(...)` Python
+   helper both require an `EvaluationProtocol` from M.1+ — calls
+   without one fail with HTTP 422 / `ProtocolViolation`. Persisted
+   `model_performance_metrics.metric_payload.protocol` carries the
+   pre-registered hash for audit. Models making causal claims must
+   set `EvaluationProtocol.causal_intent=True` (M.3+); doing so
+   triggers `docs/causal-protocol.md` enforcement — training data
+   sourced solely from `evidence_class=observational_correlational`
+   attributions or `simulation_method=naive_correlation` simulations
+   cannot sustain a causal claim.
 6. **Retire** by setting `retired_at` and removing from registry; do
    not delete artifacts.
 

@@ -21,6 +21,41 @@ architect protocol.
 - Versioning: `model_version`, `feature_pipeline_version` are required
   on every record they apply to.
 
+### Point-in-time (PIT) vocabulary (M.2 — schema landed)
+
+The anti-hindsight protocol (`docs/anti-hindsight-protocol.md`) introduces
+four temporal-provenance fields, all landed in M.2 as physical columns
+on the affected tables. Future schema changes must use these names
+exactly:
+
+- **`knowable_at`** (datetime) — the wall-clock instant at which a value
+  *first became available* to a realtime consumer. Training queries
+  filter `WHERE knowable_at <= prediction.issued_at`.
+- **`valid_from` / `valid_to`** (datetime / nullable datetime) — the
+  validity interval for *this version* of a value. SINCA col-2 → col-3
+  promotion emits two PIT records: col-2 with `valid_from = hour`,
+  `valid_to = hour + 7d`; col-3 with `valid_from = hour + 7d`,
+  `valid_to = NULL`.
+- **`realtime_proxy`** (boolean) — `True` for sources whose values
+  approximate the realtime regime (Open-Meteo, DGA, NASA POWER); `False`
+  for post-hoc reanalysis (ERA5, MERRA-2). Realtime-intended models must
+  filter `WHERE realtime_proxy = True`.
+- **`labeled_at`** (datetime) — when a *label* (breach indicator,
+  attribution cause, intervention outcome) was assigned. Distinct from
+  `event_at`: a label `labeled_at > prediction.issued_at` cannot be a
+  training feature for that prediction.
+
+Tables with M.2 PIT columns (live since 2026-05-03):
+- `sensor_readings` — `valid_from`, `valid_to`, `pit_version`. SINCA col-2 → col-3 promotion emits two rows. Unique on `(sensor_id, timestamp, valid_from)`.
+- `weather_readings` — `weather_target_id`, `realtime_proxy`. Unique on `(source, weather_target_id, timestamp)`. Closes the L.M.1-deferred idempotency gap.
+- `dust_events`, `recommendations`, `recommendation_approvals`, `action_outcomes`, `source_attributions` — `labeled_at` with context-aware default (= the table's canonical event timestamp).
+- `source_attributions` — `derivation` (default `realtime_predicted`; `post_event_analysis` is evaluation-only).
+
+Tables with M.3 causal-protocol columns (live since 2026-05-03):
+- `source_attributions` — `evidence_class` (default `observational_correlational`); see `docs/causal-protocol.md`.
+- `intervention_simulations` — `simulation_method` (default `naive_correlation`), `counterfactual_assumption` (required free-text; empty → confidence cap), `selection_bias_caveat` (default True; calibration set is operator-acted only).
+- `recommendations` — `causal_confidence` (distinct from predictive `confidence`; computed via `confidence_after_causal_penalty`).
+
 ---
 
 ## Entity catalog (Phase B/C onward)

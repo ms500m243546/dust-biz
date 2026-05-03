@@ -27,6 +27,10 @@ from datetime import datetime, timedelta
 
 from sqlalchemy.orm import Session
 
+from app.domain.evaluation_protocol import (
+    REQUIRED_BASELINES,
+    EvaluationProtocol,
+)
 from app.domain.model_performance import compute_metric_payload
 from app.domain.training_data import load_and_assemble
 from app.storage.models import (
@@ -174,7 +178,17 @@ def test_full_pipeline_produces_persisted_metric_row(session: Session) -> None:
     assert len(records) == 3
     assert all(r.outcome_status == "observed" for r in records)
 
-    payload = compute_metric_payload(records)
+    protocol = EvaluationProtocol(
+        split_strategy="walk_forward",
+        train_window_from=datetime(2025, 1, 1),
+        train_window_to=datetime(2025, 6, 1),
+        validation_window_from=datetime(2025, 6, 8),
+        validation_window_to=datetime(2025, 9, 1),
+        test_window_from=datetime(2025, 9, 8),
+        test_window_to=datetime(2026, 3, 1),
+        baselines_named=REQUIRED_BASELINES,
+    )
+    payload = compute_metric_payload(records, protocol=protocol)
     assert payload["sample_count"] == 3
     assert payload["observed_count"] == 3
     # 2 TPs at >=0.5 breach prob; both real breaches -> precision 1.0

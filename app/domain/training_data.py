@@ -22,6 +22,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from typing import Literal
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -33,6 +34,8 @@ from app.storage.models import (
     Recommendation,
     RecommendationApproval,
 )
+
+LoadMode = Literal["training_feature", "evaluation"]
 
 
 @dataclass(frozen=True)
@@ -201,8 +204,30 @@ def load_and_assemble(
     now: datetime,
     observation_window: timedelta = timedelta(minutes=180),
     model_version: str | None = None,
+    mode: LoadMode = "evaluation",
 ) -> list[TrainingRecordSchema]:
-    """Convenience: query the four tables for the window and assemble."""
+    """Convenience: query the four tables for the window and assemble.
+
+    M.2 `mode`:
+    - `"evaluation"` (default): full ground truth — every label in the
+      window participates regardless of `labeled_at`. This is correct
+      for S14's intended job: measuring what *actually happened* after
+      a prediction fired. Outcomes by definition occur after their
+      prediction; filtering them by `labeled_at <= issued_at` would
+      defeat the point of the join.
+    - `"training_feature"`: PIT-filtered. Use when consuming labels
+      as *training features* for a new model — i.e., the future S5
+      feature-engineering caller. For each prediction `p`, only labels
+      with `labeled_at <= p.issued_at` are eligible (anti-hindsight
+      rule 3). Use this mode only when training a model that takes
+      labels as features at decision-time.
+
+    The default is `"evaluation"` because every existing caller (S14
+    audit, S15 reports, shadow-mode comparisons, model_performance
+    aggregation) is doing evaluation, not feature engineering. The
+    PIT enforcement for *training* lives upstream at the feature
+    pipeline (S5; not yet implemented), where it's the right layer.
+    """
     pred_stmt = (
         select(DustPrediction)
         .where(DustPrediction.issued_at >= window_from)
@@ -233,6 +258,22 @@ def load_and_assemble(
         .where(ActionOutcome.recorded_at <= window_to + observation_window)
     )
     outcomes = list(session.execute(outcome_stmt).scalars())
+
+    if mode == "training_feature":
+        # PIT-filter labels. Callers consuming labels as training
+        # features for a new model must restrict to labels knowable
+        # at the *earliest* prediction in the window (i.e., labels
+        # that pre-date even the first prediction `p` for which they'd
+        # be features). Conservative cut: drop labels with
+        # labeled_at > earliest_issued.
+        earliest_issued = min(
+            (p.issued_at for p in predictions), default=window_from
+        )
+        recommendations = [
+            r for r in recommendations if r.labeled_at <= earliest_issued
+        ]
+        approvals = [a for a in approvals if a.labeled_at <= earliest_issued]
+        outcomes = [o for o in outcomes if o.labeled_at <= earliest_issued]
 
     return assemble_training_records(
         predictions=predictions,

@@ -23,6 +23,11 @@ DGA station shape (simplified):
 DGA stations are valley-floor instruments — useful for Los Pelambres
 receptor exposure (Cuncumén / Salamanca) but not for high-altitude
 operating zones (Los Bronces). Pair with ERA5.
+
+Realtime semantics: DGA observations are operator-grade real-time
+readings (no QC latency comparable to ERA5 reanalysis); legal as a
+realtime training feature once persisted with `realtime_proxy=True`
+once the M.2 PIT schema lands.
 """
 
 from __future__ import annotations

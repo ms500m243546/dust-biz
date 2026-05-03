@@ -1,4 +1,4 @@
-"""Shadow-mode evaluation schemas (Phase K.4)."""
+"""Shadow-mode evaluation schemas (Phase K.4; M.1 protocol gate)."""
 
 from __future__ import annotations
 
@@ -7,15 +7,21 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from app.schemas.model_performance import EvaluationProtocolSchema
+
 PromotionRecommendation = Literal["promote", "hold", "regress"]
 
 
 class ShadowEvaluationRequest(BaseModel):
+    """M.1: requires `protocol`; same protocol applied to both
+    candidate and production for an apples-to-apples comparison."""
+
     candidate_version: str
     production_version: str
     window_from: datetime
     window_to: datetime
     observation_window_minutes: int = Field(default=180, ge=1, le=24 * 60 * 7)
+    protocol: EvaluationProtocolSchema
 
 
 class ShadowEvaluationResponse(BaseModel):

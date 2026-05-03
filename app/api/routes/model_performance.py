@@ -14,11 +14,15 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.api.dependencies.auth import current_user, require_role
 from app.api.deps import get_session
+from app.domain.evaluation_protocol import (
+    EvaluationProtocol,
+    ProtocolViolation,
+)
 from app.domain.model_performance import compute_metric_payload
 from app.domain.training_data import load_and_assemble
 from app.schemas.model_performance import (
@@ -86,7 +90,47 @@ def evaluate(
         ),
         model_version=payload.model_version,
     )
-    payload_blob = compute_metric_payload(records)
+    protocol = EvaluationProtocol(
+        split_strategy=payload.protocol.split_strategy,
+        train_window_from=payload.protocol.train_window_from,
+        train_window_to=payload.protocol.train_window_to,
+        validation_window_from=payload.protocol.validation_window_from,
+        validation_window_to=payload.protocol.validation_window_to,
+        test_window_from=payload.protocol.test_window_from,
+        test_window_to=payload.protocol.test_window_to,
+        embargo_days=payload.protocol.embargo_days,
+        sealed_test_used=payload.protocol.sealed_test_used,
+        baselines_named=tuple(payload.protocol.baselines_named),
+        sinca_validated_legal_only_after_days=(
+            payload.protocol.sinca_validated_legal_only_after_days
+        ),
+        realtime_proxy_required=payload.protocol.realtime_proxy_required,
+        protocol_version=payload.protocol.protocol_version,
+        intended_for_realtime=payload.protocol.intended_for_realtime,
+        causal_intent=payload.protocol.causal_intent,
+        notes=payload.protocol.notes,
+    )
+    repo = ModelPerformanceMetricRepository(session)
+    prior_hashes = tuple(
+        (r.metric_payload or {})
+        .get("protocol", {})
+        .get("protocol_hash", "")
+        for r in repo.get_recent(
+            since=datetime(1970, 1, 1),
+            limit=500,
+            model_version=payload.model_version,
+            model_kind=None,
+        )
+    )
+    try:
+        payload_blob = compute_metric_payload(
+            records,
+            protocol=protocol,
+            prior_metric_protocol_hashes=tuple(h for h in prior_hashes if h),
+            session=session,
+        )
+    except ProtocolViolation as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     row = ModelPerformanceMetric(
         model_version=payload.model_version,
         model_kind=payload.model_kind,
@@ -96,5 +140,5 @@ def evaluate(
         sample_count=len(records),
         metric_payload=payload_blob,
     )
-    persisted = ModelPerformanceMetricRepository(session).add(row)
+    persisted = repo.add(row)
     return ModelPerformanceMetricSchema.model_validate(persisted)

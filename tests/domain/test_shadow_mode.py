@@ -6,6 +6,10 @@ from datetime import datetime, timedelta
 
 from sqlalchemy.orm import Session
 
+from app.domain.evaluation_protocol import (
+    REQUIRED_BASELINES,
+    EvaluationProtocol,
+)
 from app.domain.shadow_mode import evaluate_shadow
 from app.storage.models import (
     ActionOutcome,
@@ -13,6 +17,20 @@ from app.storage.models import (
     Recommendation,
     RecommendationApproval,
 )
+
+
+def _good_protocol() -> EvaluationProtocol:
+    """Minimal valid M.1 protocol for shadow-mode tests."""
+    return EvaluationProtocol(
+        split_strategy="walk_forward",
+        train_window_from=datetime(2025, 1, 1),
+        train_window_to=datetime(2025, 6, 1),
+        validation_window_from=datetime(2025, 6, 8),
+        validation_window_to=datetime(2025, 9, 1),
+        test_window_from=datetime(2025, 9, 8),
+        test_window_to=datetime(2026, 3, 1),
+        baselines_named=REQUIRED_BASELINES,
+    )
 
 
 def _seed_pred(
@@ -141,6 +159,7 @@ def test_promote_when_candidate_dominates(session: Session) -> None:
         window_to=base + timedelta(minutes=15),
         now=base + timedelta(hours=1),
         observation_window=timedelta(minutes=15),
+        protocol=_good_protocol(),
     )
     assert result.recommendation == "promote"
     assert result.candidate_metrics["breach_recall"] == 1.0
@@ -178,6 +197,7 @@ def test_regress_when_candidate_misses_breaches(session: Session) -> None:
         window_to=base + timedelta(minutes=10),
         now=base + timedelta(hours=1),
         observation_window=timedelta(minutes=15),
+        protocol=_good_protocol(),
     )
     assert result.recommendation == "regress"
 
@@ -236,5 +256,6 @@ def test_hold_when_no_observations(session: Session) -> None:
         window_to=base + timedelta(minutes=10),
         now=base + timedelta(minutes=1),
         observation_window=timedelta(minutes=5),
+        protocol=_good_protocol(),
     )
     assert result.recommendation == "hold"

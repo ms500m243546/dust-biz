@@ -10,11 +10,17 @@ a recommendation.
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.storage.models.base import Base
+
+
+def _default_labeled_at_from_decided(context: Any) -> datetime:
+    decided_at: datetime = context.get_current_parameters()["decided_at"]
+    return decided_at
 
 
 class RecommendationApproval(Base):
@@ -34,3 +40,11 @@ class RecommendationApproval(Base):
     override_action: Mapped[str | None] = mapped_column(String, nullable=True)
     human_reason: Mapped[str | None] = mapped_column(String, nullable=True)
     automation_level_at_decision: Mapped[str] = mapped_column(String, nullable=False)
+    # M.2: anti-hindsight rule 3. Default `labeled_at = decided_at`
+    # (context-aware).
+    labeled_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        default=_default_labeled_at_from_decided,
+        index=True,
+    )

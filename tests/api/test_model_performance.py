@@ -95,6 +95,31 @@ def _seed(session: Session, issued_at: datetime) -> None:
     session.commit()
 
 
+def _good_protocol_body() -> dict[str, object]:
+    """A minimally valid M.1 EvaluationProtocol for test bodies."""
+    return {
+        "split_strategy": "walk_forward",
+        "train_window_from": "2025-01-01T00:00:00",
+        "train_window_to": "2025-06-01T00:00:00",
+        "validation_window_from": "2025-06-08T00:00:00",
+        "validation_window_to": "2025-09-01T00:00:00",
+        "test_window_from": "2025-09-08T00:00:00",
+        "test_window_to": "2026-03-01T00:00:00",
+        "embargo_days": 7,
+        "sealed_test_used": False,
+        "baselines_named": [
+            "persistence",
+            "seasonal_naive",
+            "regulatory_threshold_classifier",
+        ],
+        "sinca_validated_legal_only_after_days": 7,
+        "realtime_proxy_required": True,
+        "protocol_version": "M.1",
+        "intended_for_realtime": True,
+        "notes": "test",
+    }
+
+
 def test_evaluate_persists_metric_row(
     client: TestClient, api_session: Session
 ) -> None:
@@ -106,6 +131,7 @@ def test_evaluate_persists_metric_row(
         "window_from": issued.isoformat(),
         "window_to": (issued + timedelta(hours=1)).isoformat(),
         "outcome_observation_minutes": 60,
+        "protocol": _good_protocol_body(),
     }
     r = client.post("/api/v1/model-performance/evaluate", json=body)
     assert r.status_code == 201, r.text
@@ -115,6 +141,9 @@ def test_evaluate_persists_metric_row(
     assert row["metric_payload"]["observed_count"] == 1
     # 0.85 >= 0.5 + breach_actual=True -> TP
     assert row["metric_payload"]["breach_precision"] == 1.0
+    # M.1: protocol block persisted on the metric row.
+    assert row["metric_payload"]["protocol"]["protocol_version"] == "M.1"
+    assert row["metric_payload"]["protocol"]["split_strategy"] == "walk_forward"
 
 
 def test_evaluate_requires_role(client: TestClient) -> None:
@@ -124,9 +153,64 @@ def test_evaluate_requires_role(client: TestClient) -> None:
         "model_kind": "dust_forecast",
         "window_from": "2026-05-01T10:00:00",
         "window_to": "2026-05-01T11:00:00",
+        "protocol": _good_protocol_body(),
     }
     r = client.post("/api/v1/model-performance/evaluate", json=body)
     assert r.status_code == 403
+
+
+def test_evaluate_without_protocol_returns_422(client: TestClient) -> None:
+    body = {
+        "model_version": "df-0.1.0",
+        "model_kind": "dust_forecast",
+        "window_from": "2026-05-01T10:00:00",
+        "window_to": "2026-05-01T11:00:00",
+        # `protocol` field missing -> Pydantic 422
+    }
+    r = client.post("/api/v1/model-performance/evaluate", json=body)
+    assert r.status_code == 422
+
+
+def test_evaluate_with_random_kfold_protocol_returns_422(
+    client: TestClient, api_session: Session
+) -> None:
+    issued = datetime(2026, 5, 1, 10, 0)
+    _seed(api_session, issued_at=issued)
+    bad_protocol = _good_protocol_body()
+    bad_protocol["split_strategy"] = "random_kfold"  # forbidden
+    body = {
+        "model_version": "df-0.1.0",
+        "model_kind": "dust_forecast",
+        "window_from": issued.isoformat(),
+        "window_to": (issued + timedelta(hours=1)).isoformat(),
+        "outcome_observation_minutes": 60,
+        "protocol": bad_protocol,
+    }
+    r = client.post("/api/v1/model-performance/evaluate", json=body)
+    # Pydantic Literal mismatch surfaces as 422 before reaching the handler.
+    assert r.status_code == 422
+
+
+def test_evaluate_with_missing_baseline_returns_422(
+    client: TestClient, api_session: Session
+) -> None:
+    issued = datetime(2026, 5, 1, 10, 0)
+    _seed(api_session, issued_at=issued)
+    bad_protocol = _good_protocol_body()
+    bad_protocol["baselines_named"] = ["persistence"]  # missing two
+    body = {
+        "model_version": "df-0.1.0",
+        "model_kind": "dust_forecast",
+        "window_from": issued.isoformat(),
+        "window_to": (issued + timedelta(hours=1)).isoformat(),
+        "outcome_observation_minutes": 60,
+        "protocol": bad_protocol,
+    }
+    r = client.post("/api/v1/model-performance/evaluate", json=body)
+    # Pydantic accepts the list, but ProtocolViolation surfaces as 422
+    # at the handler.
+    assert r.status_code == 422
+    assert "missing required baseline" in r.json()["detail"]
 
 
 def test_list_recent_returns_persisted_rows(
@@ -140,6 +224,7 @@ def test_list_recent_returns_persisted_rows(
         "window_from": issued.isoformat(),
         "window_to": (issued + timedelta(hours=1)).isoformat(),
         "outcome_observation_minutes": 60,
+        "protocol": _good_protocol_body(),
     }
     client.post("/api/v1/model-performance/evaluate", json=body)
     r = client.get("/api/v1/model-performance?since_minutes=43200")

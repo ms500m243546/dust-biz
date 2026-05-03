@@ -26,11 +26,17 @@ import io
 import urllib.parse
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 from app.ingestion.public import cache as ingest_cache
+
+# M.2: SINCA col-2 → col-3 promotion delay. Anti-hindsight protocol
+# rule 1 (docs/anti-hindsight-protocol.md). Pre-validated values are
+# legal training inputs only within this window of the hour they
+# describe; validated values become legal at hour + this delta.
+SINCA_VALIDATION_DELAY = timedelta(days=7)
 
 SOURCE_NAME = "sinca"
 _BASE = "https://sinca.mma.gob.cl/cgi-bin/APUB-MMA/apub.tsindico2.cgi"
@@ -68,7 +74,13 @@ def quality_hint_for_tier(tier: str) -> float:
     return 0.5
 
 
-def parse_sinca_csv(payload: str, *, station_code: str, parameter: str) -> list[Mapping[str, Any]]:
+def parse_sinca_csv(
+    payload: str,
+    *,
+    station_code: str,
+    parameter: str,
+    emit_all_versions: bool = False,
+) -> list[Mapping[str, Any]]:
     """Parse a SINCA `tsindico2.cgi?outtype=xcl` export into raw_value dicts.
 
     The real SINCA hourly + daily export schema (verified empirically
@@ -98,6 +110,13 @@ def parse_sinca_csv(payload: str, *, station_code: str, parameter: str) -> list[
     Value priority: col 3 (validated) → col 2 (pre-validated) → col 4
     (raw). The `validated` flag is True only when the value sourced
     from col 3.
+
+    M.2: when `emit_all_versions=True`, the parser emits BOTH a
+    pre-validated record (`validated=False`) and a validated record
+    (`validated=True`) for any hour where both columns carry a value.
+    Used by `expand_to_pit_records` to produce PIT history. The
+    pre-M.2 single-pick behavior remains the default for backwards
+    compatibility with K-phase callers.
     """
     out: list[Mapping[str, Any]] = []
     reader = csv.reader(io.StringIO(payload), delimiter=";")
@@ -119,27 +138,116 @@ def parse_sinca_csv(payload: str, *, station_code: str, parameter: str) -> list[
         prelim_raw = row[2].strip().replace(",", ".") if len(row) > 2 else ""
         validated_raw = row[3].strip().replace(",", ".") if len(row) > 3 else ""
         fallback_raw = row[4].strip().replace(",", ".") if len(row) > 4 else ""
-        if validated_raw not in ("", "S/I", "NA", "n/a"):
+
+        empty_tokens = ("", "S/I", "NA", "n/a")
+        prelim_set = prelim_raw not in empty_tokens
+        validated_set = validated_raw not in empty_tokens
+        fallback_set = fallback_raw not in empty_tokens
+
+        def _to_float(s: str) -> float | None:
+            try:
+                return float(s)
+            except ValueError:
+                return None
+
+        if emit_all_versions:
+            # Emit each version that exists. Used by PIT expansion so
+            # both col-2 (realtime) and col-3 (validated) lifetimes are
+            # representable.
+            if prelim_set:
+                v = _to_float(prelim_raw)
+                if v is not None:
+                    out.append({
+                        "station_code": station_code,
+                        "timestamp": ts,
+                        "parameter": parameter,
+                        "value_ugm3": v,
+                        "validated": False,
+                    })
+            if validated_set:
+                v = _to_float(validated_raw)
+                if v is not None:
+                    out.append({
+                        "station_code": station_code,
+                        "timestamp": ts,
+                        "parameter": parameter,
+                        "value_ugm3": v,
+                        "validated": True,
+                    })
+            if not prelim_set and not validated_set and fallback_set:
+                v = _to_float(fallback_raw)
+                if v is not None:
+                    out.append({
+                        "station_code": station_code,
+                        "timestamp": ts,
+                        "parameter": parameter,
+                        "value_ugm3": v,
+                        "validated": False,
+                    })
+            continue
+
+        # Single-pick legacy path.
+        if validated_set:
             value_str, validated = validated_raw, True
-        elif prelim_raw not in ("", "S/I", "NA", "n/a"):
+        elif prelim_set:
             value_str, validated = prelim_raw, False
-        elif fallback_raw not in ("", "S/I", "NA", "n/a"):
+        elif fallback_set:
             value_str, validated = fallback_raw, False
         else:
             continue
-        try:
-            value = float(value_str)
-        except ValueError:
+        v = _to_float(value_str)
+        if v is None:
             continue
         out.append(
             {
                 "station_code": station_code,
                 "timestamp": ts,
                 "parameter": parameter,
-                "value_ugm3": value,
+                "value_ugm3": v,
                 "validated": validated,
             }
         )
+    return out
+
+
+def expand_to_pit_records(
+    parsed: Iterable[Mapping[str, Any]],
+    *,
+    validation_delay: timedelta = SINCA_VALIDATION_DELAY,
+) -> list[Mapping[str, Any]]:
+    """Pair each parsed SINCA record with its (`valid_from`, `valid_to`).
+
+    Anti-hindsight rule 1: a value's training-legal window is bounded
+    by when it was knowable to a realtime consumer.
+
+    - **Pre-validated** (col 2, `validated=False`): knowable from the
+      hour itself; superseded after `validation_delay` by col 3.
+      `valid_from = timestamp`, `valid_to = timestamp + validation_delay`.
+    - **Validated** (col 3, `validated=True`): knowable starting at
+      `timestamp + validation_delay`; remains the canonical value
+      indefinitely. `valid_from = timestamp + validation_delay`,
+      `valid_to = None`.
+    - **Raw fallback** (col 4 only, no col-2 / col-3): treat the same
+      as pre-validated (knowable immediately) but with no later
+      promotion expected; `valid_to = None`.
+
+    Use with `parse_sinca_csv(..., emit_all_versions=True)` to get
+    both versions of an hour when both columns are set in the CSV.
+    """
+    out: list[Mapping[str, Any]] = []
+    for rec in parsed:
+        ts = rec["timestamp"]
+        validated = bool(rec.get("validated", False))
+        if validated:
+            valid_from = ts + validation_delay
+            valid_to: datetime | None = None
+        else:
+            valid_from = ts
+            valid_to = ts + validation_delay
+        rec_pit = dict(rec)
+        rec_pit["valid_from"] = valid_from
+        rec_pit["valid_to"] = valid_to
+        out.append(rec_pit)
     return out
 
 
@@ -270,10 +378,12 @@ class SincaConnector:
 
 
 __all__ = [
+    "SINCA_VALIDATION_DELAY",
     "SOURCE_NAME",
     "SincaConnector",
     "SincaStation",
     "build_url",
+    "expand_to_pit_records",
     "parse_sinca_csv",
     "quality_hint_for_tier",
     "to_raw_sensor_payload",

@@ -23,6 +23,7 @@ from typing import Any, Literal
 
 from sqlalchemy.orm import Session
 
+from app.domain.evaluation_protocol import EvaluationProtocol
 from app.domain.model_performance import compute_metric_payload
 from app.domain.training_data import load_and_assemble
 
@@ -146,10 +147,17 @@ def evaluate_shadow(
     production_version: str,
     window_from: datetime,
     window_to: datetime,
+    protocol: EvaluationProtocol,
     now: datetime | None = None,
     observation_window: timedelta = timedelta(minutes=180),
 ) -> ShadowEvaluationResult:
-    """Compare candidate_version vs production_version over [from, to]."""
+    """Compare candidate_version vs production_version over [from, to].
+
+    M.1: requires an `EvaluationProtocol` so the comparison itself
+    obeys the rigor gate (anti-overfit + anti-hindsight). The same
+    protocol is applied to both versions so the comparison is
+    apples-to-apples.
+    """
     moment = now or datetime.now(window_from.tzinfo).replace(microsecond=0) if window_from.tzinfo else now
     if moment is None:
         # Conservative: use the window_to instant for the "now" reference
@@ -173,8 +181,13 @@ def evaluate_shadow(
         model_version=production_version,
     )
 
-    cand_payload = compute_metric_payload(cand_records)
-    prod_payload = compute_metric_payload(prod_records)
+    # M.2: pass the session so SQL probes run for shadow comparisons.
+    cand_payload = compute_metric_payload(
+        cand_records, protocol=protocol, session=session
+    )
+    prod_payload = compute_metric_payload(
+        prod_records, protocol=protocol, session=session
+    )
     decision, reason = _decide(cand_payload, prod_payload)
 
     return ShadowEvaluationResult(

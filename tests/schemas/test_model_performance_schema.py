@@ -9,9 +9,22 @@ from pydantic import ValidationError
 
 from app.schemas.model_performance import (
     EvaluateModelRequest,
+    EvaluationProtocolSchema,
     ModelPerformanceMetricSchema,
     TrainingRecordSchema,
 )
+
+
+def _good_protocol_schema() -> EvaluationProtocolSchema:
+    return EvaluationProtocolSchema(
+        split_strategy="walk_forward",
+        train_window_from=datetime(2025, 1, 1),
+        train_window_to=datetime(2025, 6, 1),
+        validation_window_from=datetime(2025, 6, 8),
+        validation_window_to=datetime(2025, 9, 1),
+        test_window_from=datetime(2025, 9, 8),
+        test_window_to=datetime(2026, 3, 1),
+    )
 
 
 def test_training_record_minimum_fields() -> None:
@@ -71,6 +84,18 @@ def test_evaluate_request_rejects_bad_kind() -> None:
         EvaluateModelRequest(
             model_version="df-0.1.0",
             model_kind="banana",  # type: ignore[arg-type]
+            window_from=datetime(2026, 5, 1, 6, 0),
+            window_to=datetime(2026, 5, 1, 12, 0),
+            protocol=_good_protocol_schema(),
+        )
+
+
+def test_evaluate_request_requires_protocol() -> None:
+    """M.1: omitting `protocol` is a Pydantic validation error."""
+    with pytest.raises(ValidationError):
+        EvaluateModelRequest(  # type: ignore[call-arg]
+            model_version="df-0.1.0",
+            model_kind="dust_forecast",
             window_from=datetime(2026, 5, 1, 6, 0),
             window_to=datetime(2026, 5, 1, 12, 0),
         )

@@ -35,11 +35,14 @@ const PYTHON_TOOLING = [
   { name: 'smoke',     script: 'checks/smoke.js' },
 ];
 
-// Contract validators (active from Phase B.4 onward; data-source registry from Phase L)
+// Contract validators (active from Phase B.4 onward; data-source registry from Phase L; rigor protocols from Phase M)
 const CONTRACT_VALIDATORS = [
-  { name: 'validate-contracts',     script: 'checks/validate-contracts.js' },
-  { name: 'validate-data-sources',  script: 'checks/validate-data-sources.js' },
-  { name: 'validate-rca-seed',      script: 'checks/validate-rca-seed.js' },
+  { name: 'validate-contracts',          script: 'checks/validate-contracts.js' },
+  { name: 'validate-data-sources',       script: 'checks/validate-data-sources.js' },
+  { name: 'validate-rca-seed',           script: 'checks/validate-rca-seed.js' },
+  { name: 'validate-overfit-discipline', script: 'checks/validate-overfit-discipline.js' },
+  { name: 'validate-hindsight-discipline', script: 'checks/validate-hindsight-discipline.js' },
+  { name: 'validate-causal-discipline', script: 'checks/validate-causal-discipline.js' },
 ];
 
 // Boundary, safety, and diff inspectors (active from Phase B.5 onward)

@@ -13,11 +13,15 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.dependencies.auth import require_role
 from app.api.deps import get_session
+from app.domain.evaluation_protocol import (
+    EvaluationProtocol,
+    ProtocolViolation,
+)
 from app.domain.shadow_mode import evaluate_shadow
 from app.schemas.shadow_mode import (
     ShadowEvaluationRequest,
@@ -45,14 +49,40 @@ def evaluate(
     if window_to.tzinfo is not None:
         window_to = window_to.replace(tzinfo=None)
 
-    result = evaluate_shadow(
-        session=session,
-        candidate_version=payload.candidate_version,
-        production_version=payload.production_version,
-        window_from=window_from,
-        window_to=window_to,
-        observation_window=timedelta(minutes=payload.observation_window_minutes),
+    protocol = EvaluationProtocol(
+        split_strategy=payload.protocol.split_strategy,
+        train_window_from=payload.protocol.train_window_from,
+        train_window_to=payload.protocol.train_window_to,
+        validation_window_from=payload.protocol.validation_window_from,
+        validation_window_to=payload.protocol.validation_window_to,
+        test_window_from=payload.protocol.test_window_from,
+        test_window_to=payload.protocol.test_window_to,
+        embargo_days=payload.protocol.embargo_days,
+        sealed_test_used=payload.protocol.sealed_test_used,
+        baselines_named=tuple(payload.protocol.baselines_named),
+        sinca_validated_legal_only_after_days=(
+            payload.protocol.sinca_validated_legal_only_after_days
+        ),
+        realtime_proxy_required=payload.protocol.realtime_proxy_required,
+        protocol_version=payload.protocol.protocol_version,
+        intended_for_realtime=payload.protocol.intended_for_realtime,
+        causal_intent=payload.protocol.causal_intent,
+        notes=payload.protocol.notes,
     )
+    try:
+        result = evaluate_shadow(
+            session=session,
+            candidate_version=payload.candidate_version,
+            production_version=payload.production_version,
+            window_from=window_from,
+            window_to=window_to,
+            protocol=protocol,
+            observation_window=timedelta(
+                minutes=payload.observation_window_minutes
+            ),
+        )
+    except ProtocolViolation as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return ShadowEvaluationResponse(
         candidate_version=result.candidate_version,
         production_version=result.production_version,

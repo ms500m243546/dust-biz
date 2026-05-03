@@ -46,6 +46,10 @@ web/build/
 *.db-journal
 *.db-wal
 *.db-shm
+*.db.bak.*
+
+# Runtime logs
+logs/
 
 # Secrets
 .env

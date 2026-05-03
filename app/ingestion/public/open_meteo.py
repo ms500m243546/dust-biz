@@ -25,6 +25,7 @@ dicts. Missing variables surface as None (the schema accepts None).
 
 from __future__ import annotations
 
+import urllib.parse
 from collections.abc import Iterable, Mapping
 from datetime import datetime
 from pathlib import Path
@@ -33,6 +34,30 @@ from typing import Any
 from app.ingestion.public import cache as ingest_cache
 
 SOURCE_NAME = "open_meteo"
+
+_ARCHIVE_ENDPOINT = "https://archive-api.open-meteo.com/v1/archive"
+_FORECAST_ENDPOINT = "https://api.open-meteo.com/v1/forecast"
+
+# The variables we request from the archive API. Keys here must match
+# the Open-Meteo `hourly=` parameter names; the parser's _VARIABLE_MAP
+# below remaps them to our schema keys.
+_HOURLY_REQUEST_VARS = (
+    "temperature_2m",
+    "wind_speed_10m",
+    "wind_direction_10m",
+    "wind_gusts_10m",
+    "relative_humidity_2m",
+    "surface_pressure",
+    "rain",
+    "shortwave_radiation",
+    "cloud_cover",
+)
+
+LICENSE_NOTE = (
+    "Open-Meteo data is licensed CC-BY-NC 4.0 (non-commercial). "
+    "Production deployments must swap to ERA5; see "
+    "docs/data-source-registry.md."
+)
 
 
 _VARIABLE_MAP: dict[str, str] = {
@@ -45,7 +70,43 @@ _VARIABLE_MAP: dict[str, str] = {
     "surface_pressure": "pressure_hpa",
     "rain": "rainfall_mm_15min",  # 15-min aggregation handled by caller
     "shortwave_radiation": "solar_wm2",
+    "cloud_cover": "cloud_cover_pct",
 }
+
+
+def build_url(
+    *,
+    latitude: float,
+    longitude: float,
+    window_from: datetime,
+    window_to: datetime,
+    hourly_vars: tuple[str, ...] = _HOURLY_REQUEST_VARS,
+    endpoint: str = _ARCHIVE_ENDPOINT,
+) -> str:
+    """Build the Open-Meteo archive URL for a single lat/lon point.
+
+    The archive endpoint serves quality-controlled reanalysis (~5-day
+    lag from real-time). Timestamps are returned in UTC because we pin
+    `timezone=UTC` — this matches the SINCA timestamps so S5 features
+    can join without a TZ shift.
+
+    Wind speed comes back in m/s (`wind_speed_unit=ms`) and temperature
+    in °C (`temperature_unit=celsius`); the parser does no unit
+    conversion, so changing these defaults is a breaking change.
+    """
+    qs = urllib.parse.urlencode(
+        {
+            "latitude": f"{float(latitude):.4f}",
+            "longitude": f"{float(longitude):.4f}",
+            "start_date": window_from.strftime("%Y-%m-%d"),
+            "end_date": window_to.strftime("%Y-%m-%d"),
+            "hourly": ",".join(hourly_vars),
+            "wind_speed_unit": "ms",
+            "temperature_unit": "celsius",
+            "timezone": "UTC",
+        }
+    )
+    return f"{endpoint}?{qs}"
 
 
 def parse_open_meteo_payload(
@@ -137,7 +198,9 @@ class OpenMeteoConnector:
 
 
 __all__ = [
+    "LICENSE_NOTE",
     "SOURCE_NAME",
     "OpenMeteoConnector",
+    "build_url",
     "parse_open_meteo_payload",
 ]

@@ -4,8 +4,26 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from app.domain.evaluation_protocol import (
+    REQUIRED_BASELINES,
+    EvaluationProtocol,
+)
 from app.domain.model_performance import compute_metric_payload
 from app.schemas.model_performance import TrainingRecordSchema
+
+
+def _good_protocol() -> EvaluationProtocol:
+    """Minimal valid M.1 protocol for unit tests of compute_metric_payload."""
+    return EvaluationProtocol(
+        split_strategy="walk_forward",
+        train_window_from=datetime(2025, 1, 1),
+        train_window_to=datetime(2025, 6, 1),
+        validation_window_from=datetime(2025, 6, 8),
+        validation_window_to=datetime(2025, 9, 1),
+        test_window_from=datetime(2025, 9, 8),
+        test_window_to=datetime(2026, 3, 1),
+        baselines_named=REQUIRED_BASELINES,
+    )
 
 
 def _record(
@@ -42,7 +60,7 @@ def test_all_unobserved_returns_nulls() -> None:
     records = [
         _record(breach_prob=0.6, breach_actual=None, outcome_status="unobserved")
     ]
-    payload = compute_metric_payload(records)
+    payload = compute_metric_payload(records, protocol=_good_protocol())
     assert payload["sample_count"] == 1
     assert payload["observed_count"] == 0
     assert payload["unobserved_count"] == 1
@@ -59,7 +77,7 @@ def test_perfect_predictions_yield_high_precision() -> None:
         _record(breach_prob=0.2, breach_actual=False, actual_pm10=80),
         _record(breach_prob=0.1, breach_actual=False, actual_pm10=70),
     ]
-    payload = compute_metric_payload(records)
+    payload = compute_metric_payload(records, protocol=_good_protocol())
     assert payload["breach_precision"] == 1.0
     assert payload["breach_recall"] == 1.0
     assert payload["false_positive_rate"] == 0.0
@@ -88,7 +106,7 @@ def test_avoided_shutdown_only_counts_approved_false_positives() -> None:
             human_action="overridden",
         ),
     ]
-    payload = compute_metric_payload(records)
+    payload = compute_metric_payload(records, protocol=_good_protocol())
     assert payload["avoided_shutdowns_estimate"] == 2
 
 
@@ -113,7 +131,7 @@ def test_mae_and_calibration_computed_only_over_observed() -> None:
             outcome_status="unobserved",
         ),
     ]
-    payload = compute_metric_payload(records)
+    payload = compute_metric_payload(records, protocol=_good_protocol())
     assert payload["mae_pm10"] == (10 + 5) / 2
     # |0.6 - 1| + |0.4 - 0| = 0.4 + 0.4 -> mean 0.4
     assert payload["calibration_error"] == 0.4
@@ -122,6 +140,7 @@ def test_mae_and_calibration_computed_only_over_observed() -> None:
 
 
 def test_empty_input() -> None:
-    payload = compute_metric_payload([])
+    payload = compute_metric_payload([], protocol=_good_protocol())
     assert payload["sample_count"] == 0
     assert payload["mae_pm10"] is None
+    assert payload["protocol"]["protocol_version"] == "M.1"

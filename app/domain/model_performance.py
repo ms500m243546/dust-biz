@@ -1,4 +1,4 @@
-"""Model performance aggregation (Phase K, S14).
+"""Model performance aggregation (Phase K, S14; M.1 protocol gate).
 
 Reduces a list of `TrainingRecordSchema` rows into the
 `metric_payload` JSON blob persisted on `model_performance_metrics`
@@ -22,13 +22,29 @@ harness:
 Records with `outcome_status="unobserved"` are excluded from
 accuracy metrics but counted under `unobserved_count` so callers
 can see coverage.
+
+M.1 — `compute_metric_payload(records, *, protocol)` requires an
+`EvaluationProtocol`. The protocol's pre-registered hash, split
+strategy, baselines, and warnings are persisted on the metric row
+under the `protocol` namespace so audit and the agent-check gate can
+verify obedience after the fact. Calls that violate the protocol
+raise `ProtocolViolation` and persist nothing.
 """
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
+from app.domain.evaluation_protocol import (
+    EvaluationProtocol,
+    ProtocolViolation,
+    protocol_to_payload_keys,
+    validate_protocol_obeyed,
+)
 from app.schemas.model_performance import TrainingRecordSchema
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
 
 BREACH_DECISION_THRESHOLD = 0.5
 
@@ -39,7 +55,41 @@ def _safe_div(num: float, den: float) -> float | None:
 
 def compute_metric_payload(
     records: list[TrainingRecordSchema],
+    *,
+    protocol: EvaluationProtocol,
+    station_count: int = 1,
+    prior_metric_protocol_hashes: tuple[str, ...] = (),
+    session: Session | None = None,
 ) -> dict[str, Any]:
+    """Aggregate observed records into the metric_payload JSON blob.
+
+    Required `protocol` (M.1+): the binding evaluation contract. If the
+    protocol fails `validate_protocol_obeyed`, raises `ProtocolViolation`
+    — caller persists nothing.
+
+    M.2 `session` (optional): when provided, runs SQL-level
+    anti-hindsight probes against `sensor_readings`, `weather_readings`,
+    and label tables. Probe violations become hard errors. When None,
+    those rules emit warnings only (useful for unit tests). The API
+    route always supplies the session so the gate is fully enforced
+    in production paths.
+    """
+    validation = validate_protocol_obeyed(
+        protocol,
+        station_count=station_count,
+        prior_metric_protocol_hashes=prior_metric_protocol_hashes,
+        session=session,
+    )
+    if validation.errors:
+        raise ProtocolViolation(
+            "evaluation rejected: " + "; ".join(validation.errors)
+        )
+
+    protocol_block: dict[str, Any] = {
+        **protocol_to_payload_keys(protocol),
+        "warnings": list(validation.warnings),
+    }
+
     observed = [r for r in records if r.outcome_status == "observed"]
     unobserved_count = len(records) - len(observed)
 
@@ -56,6 +106,7 @@ def compute_metric_payload(
             "calibration_error": None,
             "avoided_shutdowns_estimate": 0,
             "production_loss_tonnes_total": 0.0,
+            "protocol": protocol_block,
         }
 
     abs_errors_pm10: list[float] = []
@@ -103,6 +154,7 @@ def compute_metric_payload(
         ),
         "avoided_shutdowns_estimate": avoided,
         "production_loss_tonnes_total": production_loss_total,
+        "protocol": protocol_block,
     }
 
 

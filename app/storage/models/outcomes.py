@@ -8,11 +8,17 @@ logic that tracks predicted vs. actual lands in Phase K.
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.storage.models.base import Base
+
+
+def _default_labeled_at_from_recorded(context: Any) -> datetime:
+    recorded_at: datetime = context.get_current_parameters()["recorded_at"]
+    return recorded_at
 
 
 class ActionOutcome(Base):
@@ -37,3 +43,11 @@ class ActionOutcome(Base):
     model_error: Mapped[str | None] = mapped_column(String, nullable=True)
     recorded_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
     recorded_by: Mapped[str] = mapped_column(String, nullable=False)
+    # M.2: anti-hindsight rule 3. Default `labeled_at = recorded_at`
+    # (context-aware).
+    labeled_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        default=_default_labeled_at_from_recorded,
+        index=True,
+    )

@@ -323,3 +323,28 @@ station_threshold_overrides:
     pm25_breach_ugm3: 50.0
     rca_reference: RCA 050/2004 amendment — El Mauro tailings consent
     source_url: https://sea.gob.cl/  # TODO_FROM_RCA
+
+# Weather-ingest targets (L.M.1). Each entry triggers one HTTP request
+# under `--source open_meteo --from-yaml`. zone_id is intentionally null
+# for non-mine-zone points; downstream consumers filter weather by
+# `WeatherReading.zone_id IS NULL OR IN <mine zones>`. When operator
+# partner data brings real per-zone weather, those rows will use a
+# concrete `zone_id` and these public-source rows remain the
+# site-wide fallback.
+#
+# Two targets is enough for L.M.1: mine centroid (proxy for the pit
+# operating regime) + Cuncumén station (colocated with the only SINCA
+# series we actually have data on).
+weather_targets:
+  - target_id: lp-mine-centroid
+    longitude: -70.5208
+    latitude: -31.7300
+    zone_id: null
+    notes: Approximate Los Pelambres pit centroid; site-wide weather proxy.
+  - target_id: lp-cuncumen-met
+    longitude: -70.7010
+    latitude: -31.9710
+    zone_id: null
+    notes: Colocated with SINCA station 424 (Cuncumén PM10) — the
+      only Choapa receptor with real data. Time-aligning wind here is
+      what makes the 14-yr PM10 series interpretable.

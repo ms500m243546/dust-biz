@@ -14,7 +14,7 @@ import argparse
 import json
 import shutil
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -41,7 +41,7 @@ def snapshot(name: str, modified: list[str], created: list[str]) -> int:
 
     manifest = {
         "name": name,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
         "modified": captured_modified,
         "created": list(created),
     }

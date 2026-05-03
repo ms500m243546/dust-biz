@@ -1,100 +1,76 @@
 # DustOps AI — Session Handoff
 
-**As of:** 2026-05-02
-**Active phase:** L.7a complete — SINCA pipeline verified live against real portal; 12 months of Cuncumén PM10 hourly data persisted; single-station reality documented for Los Pelambres
-**Last completed:** L.7a — SINCA URL/parser rewritten on real portal evidence + batch-from-yaml orchestrator + first real-data ingest
-**Validation gate:** `npm run agent-check` GREEN, **17 PASS / 0 SKIP / 0 FAIL**, 499 backend tests + 14 web tests
+**As of:** 2026-05-03
+**Active phase:** M.3.1 complete — causal-contamination disclosure layer in place. The system can no longer claim causal evidence it doesn't have. True causal inference (M.3.2 UI surfacing, M.3.3 operator-real cutoff, post-M RCT data) remains deferred.
+**Last completed:** M.3.1 — `docs/causal-protocol.md` + `app/domain/causal_protocol.py` + 4 schema columns + `pit_query.features_pre_intervention` + `EvaluationProtocol.causal_intent` SQL probe + `validate-causal-discipline.js`.
+**Validation gate:** `npm run agent-check` GREEN, **20 PASS / 0 SKIP / 0 FAIL** (was 19 at M.2; +1 new validator). 558 backend tests + 14 web tests.
 
 ---
 
 ## State at handoff
 
-- `.progress_state.json`: `current_phase=L-complete`, `completed_phases=[A..L]` (L.7a is a sub-phase of L.7, not a new top-level phase).
-- L.7a commit log on `main`:
-  - `<L.7a>` Phase L.7a — verify SINCA URL pattern live, rewrite parser for real 6-col format, add `--from-yaml` batch orchestrator, persist 12 months of Cuncumén PM10 to dustops.db.
-- Rollback log adds: `phase-l7-pre-sinca-pull`, `phase-l7-sinca-rewrite`, `phase-l7-yaml-expand`, `phase-l7-yaml-data-status`, `phase-l7-from-yaml`.
-- Memory updated: `project_phase_l7_complete.md` superseded by `project_phase_l7a_complete.md`.
+- M.3.1 changes staged in working tree, not committed.
+- Rollback log adds: `phase-m3-pre-causal` (18 modified, 6 created).
+- DB state: M.3 causal columns added via `scripts/migrate_causal_columns.py`. Backup at `dustops.db.bak.pre-m3-causal-2026-05-03`.
+- Memory: `project_phase_m3_complete.md` supersedes M.2.
 
 ---
 
-## What shipped in L.7a
+## What shipped in M.3.1
 
-### SINCA URL pattern verified empirically
+### Causal protocol (binding doc)
 
-The `build_url` from the original L.7 phase was wrong on **four axes** — it had been written from a WebFetch summary, not from the real portal. Fixes after live probing:
+[docs/causal-protocol.md](docs/causal-protocol.md) — evidence-class hierarchy + per-subsystem rules:
 
-| Axis | Was | Now |
-|---|---|---|
-| Endpoint | `apub.tsindico2.cgi?macro=...&from=YYYYMMDD` | unchanged endpoint, but: |
-| Macro structure | `./RM/<station>/Cal/<PARAM>` | `./<region_path>/<station>/Cal/<PARAM>/<PARAM>.<resolution>.<resolution>.ic` |
-| Date format | `YYYYMMDD` | `YYMMDDHH` (`from` anchored 00, `to` anchored 23) |
-| Region path | hardcoded `RM` | parametric `region_path` arg (RM / RIV / RV / ...) |
-| Resolution | n/a | new `resolution` arg: `horario` (hourly) or `diario` (daily) |
+- **Evidence classes** (strongest → weakest): `experimental`, `quasi_experimental`, `observational_correlational`, `expert_judgment`.
+- **S6** (forecasting): no causal field required; predictive-only claims allowed.
+- **S7** (attribution): `evidence_class` required (default `observational_correlational`).
+- **S9** (simulator): `simulation_method` + `counterfactual_assumption` required. Naive simulations cap confidence at 0.7.
+- **S10** (cost): `selection_bias_caveat` required (True by default — calibration only on operator-acted interventions).
+- **S12** (recommendation): `causal_confidence` distinct from predictive `confidence`; computed via `confidence_after_causal_penalty`.
 
-The fully-verified URL for Cuncumén PM10 hourly:
-```
-https://sinca.mma.gob.cl/cgi-bin/APUB-MMA/apub.tsindico2.cgi
-  ?outtype=xcl
-  &macro=./RIV/424/Cal/PM10/PM10.horario.horario.ic
-  &from=25050100&to=26050123
-```
+### Code
 
-### Parser rewritten for real 6-column SINCA format
+- **[app/domain/causal_protocol.py](app/domain/causal_protocol.py)** — `EvidenceClass` + `SimulationMethod` literals; `validate_simulation` (rejects empty counterfactual + confidence > cap); `confidence_after_causal_penalty` (penalty schedule); `probe_causal_intent_training` (SQL probe).
+- **[app/domain/pit_query.py](app/domain/pit_query.py)** — `features_pre_intervention(prediction_time, intervention_lag=3h, sensor_id=...)`. Correlated EXISTS via `func.datetime(decided_at, '+N seconds')` (SQLite-portable; PostgreSQL-translatable).
+- **[app/domain/evaluation_protocol.py](app/domain/evaluation_protocol.py)** — `EvaluationProtocol.causal_intent: bool = False`. `validate_protocol_obeyed(session=...)` calls the new probe when True.
+- **API surface** — `EvaluationProtocolSchema` (and the API route `evaluate_model` translator) carry `causal_intent` through. Default False keeps every existing caller working.
 
-The L.7 parser assumed `FECHA YYYY-MM-DD HH:MM;VALOR;VALIDADO`. The real format from `tsindico2.cgi?outtype=xcl` is six semicolon-separated columns with only the first two labeled in the header:
+### Schema
 
-```
-FECHA (YYMMDD);HORA (HHMM);
-260425;0100;;24;;            <- recent: validated value at col 3
-260425;0400;;;0;             <- raw fallback at col 4
-250521;2000;23;;;            <- older: pre-validated value at col 2
-260429;1700;;;;              <- sensor outage (all empty)
-```
+- `source_attributions.evidence_class` (default `observational_correlational`)
+- `intervention_simulations.simulation_method` (default `naive_correlation`) + `counterfactual_assumption` (default empty string) + `selection_bias_caveat` (default True)
+- `recommendations.causal_confidence` (default 0.5)
 
-Column semantics (inferred empirically across a 12-month Cuncumén dump):
+### Migration
 
-| Col | Meaning |
-|---|---|
-| 0 | FECHA (YYMMDD) |
-| 1 | HORA (HHMM) — `0000` for daily-resolution exports |
-| 2 | pre-validated value; populated for the most-recent ~year |
-| 3 | validated value; promoted from col 2 ~1 week after collection |
-| 4 | raw / non-validated fallback |
-| 5 | trailing empty padding |
+[scripts/migrate_causal_columns.py](scripts/migrate_causal_columns.py) — idempotent. Applied; all expected columns verified.
 
-Parser priority: col 3 → col 2 → col 4. `validated=True` only when source is col 3.
+### Validator
 
-### `--from-yaml` batch orchestrator
+[scripts/checks/validate-causal-discipline.js](scripts/checks/validate-causal-discipline.js) — asserts `docs/causal-protocol.md` exists with the hierarchy + simulation methods declared, `app/domain/causal_protocol.py` exports the required surface, bias register includes the 7 entries M.3 affects.
 
-`scripts/seed_public_data.py --from-yaml data_seed/los_pelambres.yaml` reads every sensor with a non-null `sinca_station_code`, fans out one HTTP request per sensor, and continues past per-station failures. New flags:
+### Tests
 
-- `--from-yaml PATH` — drive a batch from an RCA-seed YAML
-- `--include-empty` — also pull sensors flagged `sinca_data_status: no_published_data` (default: skip)
-- `--resolution {horario,diario}` — for single-station mode; ignored under `--from-yaml`
+- [tests/domain/test_causal_protocol.py](tests/domain/test_causal_protocol.py) — 13 tests (evidence-rank ordering, validate_simulation rejection paths, confidence-penalty math, ceiling enforcement).
+- [tests/domain/test_pre_intervention_filter.py](tests/domain/test_pre_intervention_filter.py) — 5 tests (intervention-window exclusion, no-intervention pass-through, PIT validity respected, multi-intervention, no-sensor-id case).
+- Backend test count: **540 → 558** (+18).
 
-YAML now carries per-sensor `sinca_region_path`, `sinca_resolution`, and `sinca_data_status` fields (purely metadata to the loader; consumed by the orchestrator).
+---
 
-### Single-station reality at Los Pelambres
+## Bias-register status updates
 
-Empirical probe of every Choapa-province SINCA station discovered that **only Cuncumén (424) publishes actual data**. All 8 other stations near Los Pelambres are registered in the SINCA portal with valid macropath schemas but return all-empty CSVs over 5+ year windows:
+| ID | Bias | Pre-M.3 | Post-M.3.1 |
+|---|---|---|---|
+| B-16 | Treatment-effect contamination | Open | **Mitigated-via-disclosure** (M.3.3 will add true cutoff with operator-real timestamps) |
+| B-17 | Reverse causality | Open | **Mitigated-via-filter** (`features_pre_intervention`) |
+| B-18 | Confounding | Open | Still open (covariate-list enforcement is M.4) |
+| B-19 | Spurious correlation | Open | **Mitigated-via-disclosure** |
+| B-20 | Lack of counterfactual | Open | **Mitigated-via-disclosure** (M.3.3 / post-M for true counterfactual) |
+| B-26 | Availability heuristic in incident labeling | Open | **Mitigated-via-disclosure** (`evidence_class=expert_judgment` flags RCA-derived labels as evaluation-only) |
+| B-33 | Operator-priority bias | Open | **Mitigated-via-disclosure** (`selection_bias_caveat=True` default) |
 
-| Station | SINCA code | sinca_data_status |
-|---|---|---|
-| Cuncumén (Salamanca) | 424 | `has_data` (hourly + daily) |
-| Caimanes (Los Vilos) | 407 | `no_published_data` |
-| El Mauro (Los Vilos) | 406 | `no_published_data` |
-| Coirón (Salamanca) | 404 | `no_published_data` |
-| Camisas (Salamanca) | 405 | `no_published_data` |
-| Hotel Mina (Salamanca) | 401 | `no_published_data` |
-| Quelen Alto (Salamanca) | 409 | `no_published_data` |
-| Chacay (Los Vilos) | 402 | `no_published_data` |
-| Punta Chungo (Los Vilos) | 408 | `no_published_data` |
-
-These are likely paper-compliance stations whose actual readings flow through SMA SEIA filings or operator audits rather than the public portal. Real coverage of Los Pelambres receptors will require either (a) the operator partnership for Antofagasta-direct telemetry (already known per L7-R5), (b) SMA SEIA report scraping, or (c) alternate networks (CAMS / MODIS / aggregators).
-
-### First real-data ingest
-
-`dustops.db` now holds **8617 PM10 hourly readings** for `lp-em05-cuncumen` covering 2025-05-01 01:00 → 2026-05-02 00:00 (~98.4% of nominal 8760 hours; ~143 hours of sensor outage spread across the year). Average `source_quality_hint` 0.900 (regulator-grade EMRPM).
+Honest framing: most are "Mitigated-via-disclosure" rather than "Mitigated outright." This is the correct framing — M.3 cannot manufacture causal evidence we don't have; it can ensure the system doesn't *pretend* it has it. Real causal mitigation needs RCT data + ≥ 2 stations.
 
 ---
 
@@ -102,50 +78,75 @@ These are likely paper-compliance stations whose actual readings flow through SM
 
 | ID | Severity | Summary | Resolution |
 |---|---|---|---|
-| L7a-R1 | medium | Only 1 of 9 nearby SINCA stations has real data; receptor coverage of Los Pelambres is sparse via SINCA alone | Pursue Antofagasta partnership (operator_real adapter) or SMA SEIA report scraping |
-| L7a-R2 | low | Full historical Cuncumén pull (2012-04-01 → present, ~14 years × 8760 hrs ≈ 122K records) not yet performed | Run as overnight batch — orchestrator already supports it; just widen `--from`/`--to` |
-| L7a-R3 | low | `sinca_resolution`, `sinca_region_path`, `sinca_data_status` in YAML are metadata-only — not stored in the Sensor schema | Schema migration deferred; orchestrator reads YAML directly, which is fine for now |
-| L7a-R4 | low | Cuncumén PM2.5 not yet pulled (separate macro: `PM2.5.horario.horario.ic`) | Add a second sensor row + run the orchestrator |
-| L5-carryover | medium-latent | Equipment-side ingest (Los Pelambres telematics) is the bottleneck for honest training | `operator_real` adapter wired since L.5; needs partnership data flow |
+| **M.3.2** | medium-latent | UI surfacing of `evidence_class` + `causal_confidence` on attribution / recommendation cards in S16 dashboard | Phase M.3.2 (frontend work) |
+| **M.3.3** | medium-latent | True intervention-window cutoff (`ActionOutcome.intervention_window`) once operator-real telematics lands | Phase M.3.3 — depends on Antofagasta partnership data flow |
+| M.4 | medium-latent | Confidence calibration enforcement (B-30), per-receptor fairness audit (B-32), Goodhart canaries (B-44), drift watch (B-12), required-covariates list (B-18) | Phase M.4 |
+| L.M1-R1 | medium | 12-month Open-Meteo live pull not yet executed (network was unreachable) | Operator-runnable; idempotent under M.2 orchestrator |
+| L7a-R1 | medium | Only 1 of 9 nearby SINCA stations has real data | Antofagasta partnership or SMA SEIA scrape |
+| L5-carryover | medium-latent | Equipment-side ingest is the bottleneck | `operator_real` adapter ready; needs partnership data flow |
 
 **Concrete next session priorities:**
 
-1. **Overnight full-history Cuncumén pull** — 2012-04-01 → 2026-05-02 hourly (~122K records). Single command, just widen the window.
-2. **Cuncumén PM2.5 pull** — add a `lp-em05-cuncumen-pm25` sensor row (or pivot to multi-parameter per sensor) and re-run `--from-yaml`.
-3. **AQICN failover adapter (Phase L.8)** — small (~50 LOC) parallel source; useful when SINCA portal is down. Tag `source_quality_hint=0.7` (re-aggregated).
-4. **CAMS adapter (Phase L.9)** — Copernicus model-grid PM10/PM2.5 every 3h on a 0.4° grid. Fills the spatial gaps where Los Pelambres receptors lack SINCA data.
-5. **MODIS AOD adapter (Phase L.10)** — NASA Earthdata; ~1km daily aerosol optical depth as an independent cross-check.
-6. **SMA SEIA report parser (Phase L.11)** — likely the only path to historical receptor data for Caimanes / El Mauro / etc. PDF parsing required.
+1. **Phase M.4 — calibration + fairness + Goodhart + drift watch.** Most-likely-to-bite-next bias surface, especially confidence calibration (B-30 has Exposure=High and is currently Open).
+2. **Phase M.3.2 — UI surfacing.** Lower priority unless preparing a partner demo; without dashboard exposure, evidence_class + causal_confidence flow only through API responses.
+3. **Run the deferred 12-month Open-Meteo live pull** when network is stable.
 
 ---
 
-## How to run the overnight full-history pull
+## How a model declares causal intent (M.3+)
 
-```bash
-# Cuncumén only (the only station with data); ~14 years of hourly
-.venv/Scripts/python.exe scripts/seed_public_data.py --source sinca \
-    --from-yaml data_seed/los_pelambres.yaml \
-    --from 2012-04-01 --to 2026-05-02
+```python
+from app.domain.evaluation_protocol import EvaluationProtocol
 
-# Or one station explicitly
-.venv/Scripts/python.exe scripts/seed_public_data.py --source sinca \
-    --station 424 --region-path RIV --resolution horario \
-    --station-name "Cuncumen" --region "Coquimbo" --commune "Salamanca" \
-    --longitude -70.701 --latitude -31.971 --tier EMRPM \
-    --parameter pm10 --from 2012-04-01 --to 2026-05-02 \
-    --sensor-id lp-em05-cuncumen
+protocol = EvaluationProtocol(
+    split_strategy="walk_forward",
+    # ... usual M.1 fields ...
+    causal_intent=True,  # claims its predictions are causally grounded
+)
 ```
 
-Disk cache lives at `data_cache/sinca/`; re-runs are free after the first fetch. Persists into `dustops.db`.
+When `causal_intent=True` and a session is provided to `validate_protocol_obeyed`:
+- Training window must include at least one `quasi_experimental` or `experimental` `SourceAttribution` row, OR
+- Training window must include at least one `dispersion_model` / `propensity_matched` / `rct` `InterventionSimulation` row.
+- Otherwise: HTTP 422 / `ProtocolViolation`.
+
+For predictive-only models, leave `causal_intent=False` (the default).
 
 ---
 
-## Key references
+## How to use the new pre-intervention filter
 
-- **`app/ingestion/public/sinca.py`** — `build_url` + `parse_sinca_csv` (verified empirically on 2026-05-02)
-- **`scripts/seed_public_data.py`** — orchestrator with single-station + `--from-yaml` modes
-- **`data_seed/los_pelambres.yaml`** — RCA seed with `sinca_data_status` annotations per station
-- **`tests/ingestion/fixtures/sinca_cuncumen_pm10.csv`** — captured real SINCA response (3KB, 1 week)
-- **`docs/data-source-registry.md`** — contract for every public source
-- **`docs/rca-seed.md`** — RCA provenance for Los Pelambres + Los Bronces
-- **Model contracts:** `docs/model-contracts.md` (lifecycle step 5 shadow-evaluation now usable against real Cuncumén history)
+```python
+from app.domain.pit_query import features_pre_intervention
+from app.storage.models import SensorReading
+
+# Train a forecaster that learns the *natural* PM10 trajectory:
+rows = list(session.execute(
+    features_pre_intervention(
+        prediction_time=T,
+        intervention_lag=timedelta(hours=3),
+        sensor_id="lp-em05-cuncumen",
+    )
+).scalars())
+```
+
+Drops sensor rows whose `timestamp` falls inside any operator-approval window `[decided_at, decided_at+lag)`. Use any time you're consuming features for a model that should NOT learn the post-intervention reality.
+
+---
+
+## Key references (M.3.1)
+
+- **[docs/causal-protocol.md](docs/causal-protocol.md)** — binding spec
+- **[app/domain/causal_protocol.py](app/domain/causal_protocol.py)** — `EvidenceClass`, `SimulationMethod`, `validate_simulation`, `confidence_after_causal_penalty`, `probe_causal_intent_training`
+- **[app/domain/pit_query.py](app/domain/pit_query.py)** — `features_pre_intervention` joins the existing as-of helpers
+- **[scripts/migrate_causal_columns.py](scripts/migrate_causal_columns.py)** — schema migration
+- **[scripts/checks/validate-causal-discipline.js](scripts/checks/validate-causal-discipline.js)** — agent-check gate
+- **[docs/bias-register.md](docs/bias-register.md)** — 7 Status flips per M.3.1; B-18 still open
+- **[docs/data-contracts.md](docs/data-contracts.md)** — M.3 causal columns documented
+- **[docs/model-contracts.md](docs/model-contracts.md)** — lifecycle step 5 cross-references the causal protocol
+
+## Earlier-phase references (still current)
+
+- **[docs/anti-overfit-protocol.md](docs/anti-overfit-protocol.md)** + **[docs/anti-hindsight-protocol.md](docs/anti-hindsight-protocol.md)** — M.1 + M.2 contracts
+- **[scripts/migrate_pit_columns.py](scripts/migrate_pit_columns.py)** — M.2 PIT migration
+- **[scripts/migrate_unique_constraints.py](scripts/migrate_unique_constraints.py)** — L.M.1 dedup migration

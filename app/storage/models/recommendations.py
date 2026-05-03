@@ -17,6 +17,11 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.storage.models.base import Base
 
 
+def _default_labeled_at_from_issued(context: Any) -> datetime:
+    issued_at: datetime = context.get_current_parameters()["issued_at"]
+    return issued_at
+
+
 class Recommendation(Base):
     __tablename__ = "recommendations"
 
@@ -41,3 +46,19 @@ class Recommendation(Base):
     linked_attribution_id: Mapped[str | None] = mapped_column(String, nullable=True)
     automation_level: Mapped[str] = mapped_column(String, nullable=False)
     top_production_impact: Mapped[str | None] = mapped_column(String, nullable=True)
+    # M.2: anti-hindsight rule 3. Default `labeled_at = issued_at`
+    # (context-aware) for system-generated recommendations; manual
+    # human edits override.
+    labeled_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        default=_default_labeled_at_from_issued,
+        index=True,
+    )
+    # M.3: causal-protocol — separate the *causal* claim's confidence
+    # from the *predictive* one. Default = `confidence` (no causal
+    # downgrade); domain logic that builds Recommendations from a
+    # naive_correlation simulation downgrades this explicitly.
+    causal_confidence: Mapped[float] = mapped_column(
+        Float, nullable=False, default=0.5
+    )

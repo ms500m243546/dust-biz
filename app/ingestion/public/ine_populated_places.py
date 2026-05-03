@@ -23,6 +23,13 @@ Expected payload shape:
         ...
       ]
     }
+
+Realtime semantics: this is **static spatial data**, not a time series.
+There is no "realtime vs reanalysis" distinction; populated-place
+geometries are census-cycle (5–10 yr) snapshots and are not consumed
+as features by the realtime forecaster. The anti-hindsight protocol
+treats static spatial data as out-of-scope (regulator-cycle reference
+layer).
 """
 
 from __future__ import annotations

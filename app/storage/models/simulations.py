@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, Integer, String
+from sqlalchemy import Boolean, DateTime, Float, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.storage.models.base import Base
@@ -40,3 +40,22 @@ class InterventionSimulation(Base):
     cost_model_version: Mapped[str] = mapped_column(String, nullable=False)
     source: Mapped[str] = mapped_column(String, nullable=False)
     main_uncertainty: Mapped[str | None] = mapped_column(String, nullable=True)
+    # M.3: causal-protocol rules. `simulation_method` names what
+    # produced the predicted_pm10_reduction estimate. Realistic
+    # default = `naive_correlation` (we have no RCT data). Confidence
+    # is automatically capped at 0.7 for naive simulations by the
+    # validator at write time. `counterfactual_assumption` is the
+    # operator-readable disclosure of what world-model the simulator
+    # assumed (e.g., "no-op baseline" — biased because operators
+    # always react). `selection_bias_caveat` is True when the
+    # production-cost portion of this row was calibrated only on
+    # operator-acted interventions.
+    simulation_method: Mapped[str] = mapped_column(
+        String, nullable=False, default="naive_correlation", index=True
+    )
+    counterfactual_assumption: Mapped[str] = mapped_column(
+        String, nullable=False, default=""
+    )
+    selection_bias_caveat: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True
+    )
