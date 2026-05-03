@@ -111,6 +111,12 @@ code { font-family: 'SF Mono', Menlo, monospace; font-size: 0.9em; background: r
 
 .caveat-stack { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
 
+.evidence-dist { display: flex; flex-direction: column; gap: 8px; }
+.evidence-bar { display: flex; height: 16px; border-radius: 4px; overflow: hidden; background: #ececec; }
+.evidence-bar-segment { height: 100%; }
+.evidence-legend { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 12px; font-size: 0.85em; }
+.evidence-legend-row { display: flex; align-items: center; gap: 6px; }
+
 .per-receptor-table { width: 100%; }
 .per-receptor-row td { border-left: 3px solid transparent; }
 .per-receptor-row.per-receptor-grey td:first-child { border-left-color: var(--grey); }

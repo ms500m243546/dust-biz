@@ -72,6 +72,16 @@ If a UI element does not help an operator decide, remove it.
 - Monthly savings
 - Environmental performance trend
 
+### Annex: Phase T model-evidence cards
+
+The Compliance view gains three real-model surfaces (Phase T):
+
+- **Per-receptor fairness (M.4.2 / Q.3)** — table of per-station mae_pm10 / breach_recall / precision / FPR, sorted worst-MAE first; each row tinted yellow / red when metrics fall outside the configured thresholds. Backed by `metric_payload.per_receptor`.
+- **Multi-station caveat banners (Q.3)** — yellow warning rows for `survivor_caveat` (B-5), `selection_caveat` (B-6), and `cross_mine_eval` (B-14). Renders nothing when all three are null. Surfaced in both Compliance and Drift views.
+- **Attribution evidence distribution (S.1)** — horizontal-stacked bar of EvidenceClass counts across recent attributions, with a per-class legend. Strong tier (experimental, quasi_experimental) tinted green; weak tier (observational, expert_judgment) tinted yellow. Backed by `api.attributions()`.
+
+These surfaces are *evidence cards*, not decision controls — operators read them to decide whether to trust the model's recommendations, not to take action directly.
+
 ### Annex: Drift view (Phase N — env_manager + admin only)
 
 A role-restricted, model-trust surface mounted at `/drift`. Not one of

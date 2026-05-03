@@ -3,6 +3,7 @@ import { CalibrationBadge } from '../components/CalibrationBadge';
 import { Card } from '../components/Card';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { EvidenceChip } from '../components/EvidenceChip';
+import { EvidenceDistribution } from '../components/EvidenceDistribution';
 import { MultiStationCaveats } from '../components/MultiStationCaveats';
 import { PerReceptorTable } from '../components/PerReceptorTable';
 import { useApi } from '../hooks/useApi';
@@ -108,6 +109,22 @@ export function Compliance() {
               </ul>
             )
             : <p className="muted">No events recorded.</p>}
+        </Card>
+      </ErrorBoundary>
+
+      <ErrorBoundary label="Evidence-class distribution">
+        <Card
+          title="Attribution evidence distribution (S.1)"
+          subtitle="Aggregate EvidenceClass across recent attributions"
+        >
+          <EvidenceDistribution attributions={attributions.data} />
+          <p className="muted">
+            Strong tier (experimental, quasi-experimental) is grounded
+            in causal evidence; weak tier (observational, expert
+            judgment) is correlation-only. Phase S.1 logreg upgrades
+            observational → quasi-experimental when learned feature
+            importances pass the QE thresholds.
+          </p>
         </Card>
       </ErrorBoundary>
 
