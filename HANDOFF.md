@@ -1,8 +1,8 @@
 # DustOps AI — Session Handoff
 
 **As of:** 2026-05-03
-**Active phase:** **Phase S.2 complete — END of the autonomous P→Q→R→S batch run.** All four phases shipped + green-gated + committed per sub-phase. 10 sub-phase commits this session (P.1 → S.2). 4 phases of real models + bias mitigations on top of the M-block discipline.
-**Last completed:** S.2 — `maybe_promote_logreg` artifact-driven promotion wired into the FastAPI lifespan; 5 new tests.
+**Active phase:** **Phase W.2 complete — END of the autonomous T→W batch run.** 11 more sub-phase commits on top of the prior P→Q→R→S batch (21 sub-phase commits total this session). Operator-trust UI surfaces, physics-informed cost model, end-to-end integration validation, and continuous re-training loop all landed.
+**Last completed:** W.2 — drift-triggered retrain endpoint + audit-trail behaviour; 7 new tests.
 **Validation gate:** `npm run agent-check` GREEN, **22 PASS / 0 SKIP / 0 FAIL**.
 
 ---

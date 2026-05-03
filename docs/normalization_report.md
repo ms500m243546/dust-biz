@@ -8,6 +8,21 @@ phase.
 
 ## Active phase
 
+**Phase W.2 — Drift-triggered re-training (2026-05-03). END of T→W batch.**
+Status: complete. New `app/domain/drift_response.py:trigger_drift_retrain` bridges M.4.3 detection to W.1 retraining: pulls metric_payload rows, runs `compute_drift`, filters to ACT-tier alerts (`delta ≥ 2 × threshold`), and triggers immediate `weekly_dust_forecast_retrain` if any qualify. Always emits ≥ 1 audit row (`drift_retrain_skipped` if no ACT alerts; `drift_retrain_triggered` + `drift_retrain_completed` / `drift_retrain_failed` otherwise). New `POST /api/v1/drift/retrain?model_version=&since_days=&min_samples=` endpoint, admin-only via `require_role("admin")`. 7 new tests covering ACT-tier filter, skip path, run path, retrain-failure capture, window plumbing.
+
+**Phase W.1 — Scheduled weekly retrain (2026-05-03).**
+Status: complete. New `app/domain/training_scheduler.py:weekly_dust_forecast_retrain` runs `train_many` over `MULTI_STATION_ROSTER` under the canonical Phase P.1 protocol weekly when `settings.scheduler_enabled` is True. Wired into `get_default_scheduler()` via lazy import (so the scheduler module doesn't pull sklearn at import time). Tolerant by design — retrain failures log INFO and the scheduler keeps ticking. 6 new tests.
+
+**Phase V.3 — Confidence propagation regression suite (2026-05-03).**
+Status: complete. New `tests/domain/test_confidence_propagation.py` asserts confidence flows honestly through prediction → intervention → cost: forecast confidence scales with `input_data_quality_score`; AP-42 + cycle-time confidence > heuristic for physics-applicable interventions; fallback paths emit equal confidence (no boost); no production rate downgrades cost confidence by 0.30. Uses a minimal in-process GBM artifact bundle (HistGradientBoosting on 64 synthetic rows) so the GBM-path test doesn't need the full training pipeline. 7 tests.
+
+**Phase V.2 — Audit-trail model_version consistency (2026-05-03).**
+Status: complete. New `tests/domain/test_audit_model_version_consistency.py` verifies promoted models stamp their *own* `model_version` into output schemas. Coverage: registry-pointer flips for all three kinds; promoted attributor emits LOGREG_VERSION; promoted intervention emits AP42_VERSION; promoted cost emits CYCLE_TIME_VERSION; demotion restores baseline. 7 tests.
+
+**Phase V.1 — End-to-end registry-state integration tests (2026-05-03).**
+Status: complete. New `tests/integration/test_recommendation_with_real_models.py` verifies the lifespan promotion sequence: intervention → AP-42 (sanity-band), cost → cycle-time (sanity-band), attribution holds rules baseline w/o artifact + flips to logreg with one. Baseline versions remain registered as fallbacks (Guardrail 11). 6 tests.
+
 **Phase U.2 — Cycle-time cost promotion (2026-05-03).**
 Status: complete. End of Phase U. New `app/domain/cost_promotion.py:maybe_promote_cycle_time_cost` runs the canonical 1000 t/h × 60 min probe against `CycleTimeProductionCost`; if `tonnes_delayed` for both `reduce_speed` and `water_road` falls in `[50, 800]` t, promote. Wired into the FastAPI lifespan hook alongside the GBM / AP-42 / logreg promotions. Tolerant by design — heuristic stays current on any failure. 5 new tests cover sanity-band pass, registry flip, idempotency under repeated calls, sanity-constants reasonableness, and heuristic-still-registered side-by-side. End of the second half of T-W batch.
 
