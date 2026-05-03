@@ -77,6 +77,10 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     from app.domain.intervention_promotion import maybe_promote_ap42
 
     maybe_promote_ap42()
+    # Phase S.2 — same pattern for the logreg attribution model.
+    from app.domain.attribution_promotion import maybe_promote_logreg
+
+    maybe_promote_logreg()
     scheduler = None
     if settings.scheduler_enabled:
         from app.domain.scheduler import get_default_scheduler

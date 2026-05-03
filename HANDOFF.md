@@ -1,8 +1,8 @@
 # DustOps AI — Session Handoff
 
 **As of:** 2026-05-03
-**Active phase:** Phase S.1 complete — `LogRegAttributor` registered alongside the rules baseline; cold-start at parity, fitted-artifact path drives EvidenceClass upgrades. Autonomous P→Q→R→S continues with S.2 (promotion).
-**Last completed:** S.1 — logreg attributor + `train_logreg_attributor` + EvidenceClass assignment rule + 6 tests.
+**Active phase:** **Phase S.2 complete — END of the autonomous P→Q→R→S batch run.** All four phases shipped + green-gated + committed per sub-phase. 10 sub-phase commits this session (P.1 → S.2). 4 phases of real models + bias mitigations on top of the M-block discipline.
+**Last completed:** S.2 — `maybe_promote_logreg` artifact-driven promotion wired into the FastAPI lifespan; 5 new tests.
 **Validation gate:** `npm run agent-check` GREEN, **22 PASS / 0 SKIP / 0 FAIL**.
 
 ---
