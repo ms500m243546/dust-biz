@@ -685,6 +685,79 @@ def _as_float(v: object) -> float | None:
 _ = json
 
 
+@dataclass(frozen=True)
+class PromotionDecision:
+    """Result of `decide_promotion()` — whether to set the GBM as current.
+
+    `passed` is True iff every criterion below holds. Failure reasons
+    are surfaced in `reasons` for the operator audit trail.
+    """
+
+    passed: bool
+    reasons: tuple[str, ...]
+
+
+# Phase P.3 promotion criteria. Conservative defaults — promotion is a
+# trust statement, not a default behaviour. Operators tighten / loosen
+# at deployment time by editing this constant or shipping a new phase.
+PROMOTION_MAX_MAE_PM10 = 30.0
+PROMOTION_MIN_TEST_SAMPLES = 100
+
+
+def decide_promotion(metric_payload: dict[str, Any]) -> PromotionDecision:
+    """Pure evaluator over a persisted M.4 metric_payload row.
+
+    Criteria:
+      - ECE within the protocol's max_ece (already enforced upstream
+        by compute_metric_payload, but checked again defensively).
+      - MAE on PM10 below `PROMOTION_MAX_MAE_PM10` µg/m³.
+      - Test sample count above `PROMOTION_MIN_TEST_SAMPLES` (so
+        thin-sample noise doesn't trigger a false promote).
+      - breach_recall is either non-None (a real positive class exists
+        in the test window) OR observed_count > 0 (test ran but
+        positive class is empty — class imbalance B-8 territory; we
+        don't block promotion on a metric that has no signal).
+
+    `breach_recall is None` due to zero positives is documented as an
+    inherent property of rare-event evaluation, not a model failure.
+    """
+    reasons: list[str] = []
+    ece = metric_payload.get("ece")
+    if not isinstance(ece, (int, float)):
+        reasons.append("ece missing or non-numeric in metric_payload")
+    else:
+        max_ece = (metric_payload.get("protocol") or {}).get(
+            "max_ece", DEFAULT_MAX_ECE_FALLBACK
+        )
+        if ece > max_ece:
+            reasons.append(
+                f"ece={ece:.4f} > max_ece={max_ece:.4f} (M.4.1 gate)"
+            )
+
+    mae = metric_payload.get("mae_pm10")
+    if mae is None:
+        reasons.append("mae_pm10 missing — cannot evaluate accuracy")
+    elif mae > PROMOTION_MAX_MAE_PM10:
+        reasons.append(
+            f"mae_pm10={mae:.2f} > {PROMOTION_MAX_MAE_PM10} µg/m³ "
+            "(promotion threshold)"
+        )
+
+    obs = metric_payload.get("observed_count", 0)
+    if obs < PROMOTION_MIN_TEST_SAMPLES:
+        reasons.append(
+            f"observed_count={obs} < {PROMOTION_MIN_TEST_SAMPLES} "
+            "(thin-sample guard)"
+        )
+
+    return PromotionDecision(passed=not reasons, reasons=tuple(reasons))
+
+
+# Default echoes app.domain.evaluation_protocol.DEFAULT_MAX_ECE without
+# the cross-import (this module already pulls EvaluationProtocol).
+DEFAULT_MAX_ECE_FALLBACK = 0.05
+
+
 __all__ = [
     "FEATURE_SET_P1",
     "REQUIRED_COVARIATES_P1",
@@ -693,11 +766,15 @@ __all__ = [
     "DEFAULT_HORIZON",
     "HORIZON_MINUTES",
     "PM10_BREACH",
+    "PROMOTION_MAX_MAE_PM10",
+    "PROMOTION_MIN_TEST_SAMPLES",
     "STATION_WEATHER_TARGETS",
     "DEFAULT_WEATHER_TARGET",
     "GBM_VERSION",
     "MODEL_KIND",
+    "PromotionDecision",
     "TrainingResult",
     "build_p1_protocol",
+    "decide_promotion",
     "train_one",
 ]

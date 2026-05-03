@@ -64,6 +64,12 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     """
     settings = get_settings()
     Base.metadata.create_all(get_engine())
+    # Phase P.3 — promote the trained GBM forecast model to `current`
+    # if its latest M.4 metric_payload row passes the criteria. Tolerant:
+    # leaves the heuristic baseline current if anything goes wrong.
+    from app.domain.dust_forecast_promotion import maybe_promote_gbm
+
+    maybe_promote_gbm()
     scheduler = None
     if settings.scheduler_enabled:
         from app.domain.scheduler import get_default_scheduler

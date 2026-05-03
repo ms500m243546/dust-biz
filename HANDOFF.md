@@ -1,9 +1,9 @@
 # DustOps AI — Session Handoff
 
 **As of:** 2026-05-03
-**Active phase:** Phase P.2 complete — first real PM10 forecast model trained on Cuncumén; ECE ≈ 0, MAE 9.25 µg/m³ on a 758-row sealed test set. Autonomous P→Q→R→S batch run in progress.
-**Last completed:** P.2 — real `train_one()` end-to-end. SG-1 stop-gate did not trigger; first fit passed M.4.1 calibration gate without recalibration. Artifact persisted to `data_models/dust_forecast/dust_forecast_gbm_v0.1.0/lp-em05-cuncumen__60min.joblib`; metric_id=1 written.
-**Validation gate:** `npm run agent-check` GREEN, **21 PASS / 0 SKIP / 0 FAIL**. Backend tests grew with the training suite.
+**Active phase:** Phase P.3 complete — GBM is now the `current` `dust_forecast` model on any process with the Phase P.2 metric row in its DB. Phase P done. Autonomous P→Q→R→S batch continues with Q.1.
+**Last completed:** P.3 — `app.domain.dust_forecast_promotion.maybe_promote_gbm` evaluates `decide_promotion()` over the latest persisted M.4 metric_payload row and flips the registry; wired into FastAPI lifespan. Tolerant — heuristic stays current on any failure.
+**Validation gate:** `npm run agent-check` GREEN, **21 PASS / 0 SKIP / 0 FAIL**.
 
 ---
 

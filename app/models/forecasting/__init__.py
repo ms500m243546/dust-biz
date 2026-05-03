@@ -2,9 +2,10 @@
 
 `HeuristicBaselineForecaster` is the cold-start fallback (Phase E,
 Guardrail 11). `GBMForecaster` (Phase P) is the first trained
-implementation; it is registered alongside but is NOT promoted to
-current until Phase P.3 — and only if it passes the M.4.1 ECE gate
-on Cuncumén.
+implementation. Both are registered here; promotion of the GBM to
+`current` is decided by `app.domain.dust_forecast_promotion.
+maybe_promote_gbm`, which is called from the API lifespan hook
+(layered: api → domain → storage; models stay pure).
 """
 
 from app.models import registry
@@ -18,13 +19,12 @@ from app.models.forecasting.heuristic_baseline import (
     HeuristicBaselineForecaster,
 )
 
-# Heuristic baseline is registered first AND set as current — Phase
-# E behaviour preserved. The trained GBM is registered as an
-# additional version (set_as_current=False) so the registry can
-# resolve it by version string but the live model stays heuristic
-# until P.3 promotion.
+# Heuristic baseline is registered first AND set as current — Phase E
+# behaviour preserved. The trained GBM is registered as an additional
+# version (set_as_current=False); promotion is decided downstream.
 registry.register(HeuristicBaselineForecaster())
 registry.register(GBMForecaster(), set_as_current=False)
+
 
 __all__ = [
     "GBM_VERSION",
