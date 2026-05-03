@@ -70,6 +70,13 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     from app.domain.dust_forecast_promotion import maybe_promote_gbm
 
     maybe_promote_gbm()
+    # Phase R.2 — same pattern for the AP-42 intervention model. Uses
+    # the sanity-band fallback when ActionOutcome rows are too thin
+    # for empirical calibration (the typical case until partnership
+    # data lands).
+    from app.domain.intervention_promotion import maybe_promote_ap42
+
+    maybe_promote_ap42()
     scheduler = None
     if settings.scheduler_enabled:
         from app.domain.scheduler import get_default_scheduler

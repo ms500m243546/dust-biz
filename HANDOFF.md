@@ -1,8 +1,8 @@
 # DustOps AI — Session Handoff
 
 **As of:** 2026-05-03
-**Active phase:** Phase R.1 complete — AP-42 physics-informed intervention model landed. Watering + speed-reduction now grounded in EPA §13.2.2; other interventions stay heuristic. Autonomous P→Q→R→S continues with R.2 (calibration vs ActionOutcome / honest deferral).
-**Last completed:** R.1 — `app/domain/ap42_emission.py` pure functions + `app/models/intervention/ap42_v0_1_0.py:AP42InterventionImpact` registered alongside heuristic.
+**Active phase:** Phase R.2 complete — intervention calibration in honest-deferral mode (SG-3 fired: 0 ActionOutcome rows). AP-42 promoted to `current` via sanity-band fallback. End of Phase R. Autonomous P→Q→R→S continues with S.1 (real source attribution).
+**Last completed:** R.2 — `validate_intervention_calibration` + `maybe_promote_ap42` wired into the lifespan hook; `docs/intervention-physics.md` is the binding contract.
 **Validation gate:** `npm run agent-check` GREEN, **22 PASS / 0 SKIP / 0 FAIL**.
 
 ---
