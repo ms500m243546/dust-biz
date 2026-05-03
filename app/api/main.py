@@ -81,6 +81,13 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     from app.domain.attribution_promotion import maybe_promote_logreg
 
     maybe_promote_logreg()
+    # Phase U.2 — same pattern for the cycle-time production-cost
+    # model. Promotes via canonical-probe sanity band until real
+    # ActionOutcome.production_loss_tonnes_actual data is available
+    # for empirical calibration.
+    from app.domain.cost_promotion import maybe_promote_cycle_time_cost
+
+    maybe_promote_cycle_time_cost()
     scheduler = None
     if settings.scheduler_enabled:
         from app.domain.scheduler import get_default_scheduler

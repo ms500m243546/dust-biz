@@ -77,9 +77,35 @@ recommendation/outcome pairs. Until then:
   this out: "AP-42 physics; R.1 uses documented defaults … pending
   Phase R.2 calibration."
 
+## Production-cost model (Phase U.1 / U.2)
+
+`CycleTimeProductionCost` (`production_cost_cycle_time_v0.1.0`) replaces the heuristic baseline for the two interventions where physics applies cleanly:
+
+| intervention_id | physics function | source flag |
+|---|---|---|
+| `reduce_speed` | `speed_reduction_cycle_impact(...)` | `model` (physics) |
+| `water_road` | `watering_one_time_cycle_hit(...)` | `model` (physics) |
+| any other | heuristic-baseline cycle_time_pct | `heuristic_fallback` |
+
+`tonnes_delayed = production_rate_tph × duration_hr × cycle_increase_frac / (1 + cycle_increase_frac)`. Closed-form so the loss share never exceeds the underlying throughput.
+
+### Phase U.1 documented defaults
+
+| input | default | basis |
+|---|---|---|
+| `speed_before_kmh` | 50 | typical loaded haul-truck cruise |
+| `speed_after_kmh` | 25 | typical operator-imposed reduced limit |
+| `watering_window_min` | 8 | empirical pass duration per truck |
+| `cycle_baseline_sec` | 180 | typical short-pit→dump loop |
+| `fleet_size` | 8 | conservative mid-size active fleet |
+
+### Phase U.2 promotion
+
+`app/domain/cost_promotion.py:maybe_promote_cycle_time_cost` runs in the lifespan hook. Sanity-band: `tonnes_delayed` for both `reduce_speed` and `water_road` at the canonical 1000 t/h × 60 min probe must fall in `[50, 800]` t. If yes, promote. If not, heuristic stays current.
+
 ## What this protocol does NOT cover
 
-- Production-cost model (S10) — separate `ProductionCostModel`.
+- Calibration of cost vs `ActionOutcome.production_loss_tonnes_actual` — deferred until partnership data lands (same gate as R.2 intervention calibration).
 - Source attribution (S7) — Phase S.
 - Forecast model (S6) — Phase P.
 - Optimization (S11) — heuristic for the foreseeable future.

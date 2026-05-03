@@ -8,6 +8,21 @@ phase.
 
 ## Active phase
 
+**Phase U.2 — Cycle-time cost promotion (2026-05-03).**
+Status: complete. End of Phase U. New `app/domain/cost_promotion.py:maybe_promote_cycle_time_cost` runs the canonical 1000 t/h × 60 min probe against `CycleTimeProductionCost`; if `tonnes_delayed` for both `reduce_speed` and `water_road` falls in `[50, 800]` t, promote. Wired into the FastAPI lifespan hook alongside the GBM / AP-42 / logreg promotions. Tolerant by design — heuristic stays current on any failure. 5 new tests cover sanity-band pass, registry flip, idempotency under repeated calls, sanity-constants reasonableness, and heuristic-still-registered side-by-side. End of the second half of T-W batch.
+
+**Phase U.1 — Cycle-time-aware production cost model (2026-05-03).**
+Status: complete. New `app/domain/production_cost_physics.py` ships pure-function physics: `speed_reduction_cycle_impact` (cycle ≈ 1/speed; 50→25 km/h doubles cycle time), `watering_one_time_cycle_hit` (window/baseline/fleet), `tonnes_delayed_from_cycle` (closed-form `loss/(1+loss)`). New model `CycleTimeProductionCost` (`production_cost_cycle_time_v0.1.0`) routes `reduce_speed` + `water_road` through the physics, falling back to heuristic-baseline coefficients (with `heuristic_fallback` source-tag and no confidence boost) for all other interventions. 15 new tests covering edge cases + closed-form correctness + monotonicity properties. Documented defaults pending site-config integration.
+
+**Phase T.3 — EvidenceClass distribution (2026-05-03).**
+Status: complete. New `EvidenceDistribution` web component renders an aggregate horizontal-stacked bar of EvidenceClass counts across recent attributions, plus a per-class legend tinted by tier (strong = green, weak = yellow). Wired into the Compliance view above the existing source-attributions card. AP-42 per-action source flag was deferred — surfacing it requires the recommendation schema to carry per-action simulation source, which is a larger backend change than warranted for T.3. 6 new vitest cases.
+
+**Phase T.2 — Multi-station caveat banners (2026-05-03).**
+Status: complete. New `MultiStationCaveats` web component renders `survivor_caveat` (B-5), `selection_caveat` (B-6), and `cross_mine_eval` (B-14) blocks from the latest metric_payload row. Each gets a yellow warning row with the human-readable message; cross-mine block also lists trained-on mine + evaluated-on mines as code spans. Renders nothing when all three are null. Wired into both Compliance (per-receptor card) and Drift views. 5 new vitest cases.
+
+**Phase T.1 — Per-receptor fairness panel (2026-05-03).**
+Status: complete. New `PerReceptorTable` web component renders `metric_payload.per_receptor` as a sortable table; rows sorted worst-MAE first; per-row left-border tier (red ≥ 1.5× threshold or recall < 50% of recall threshold; yellow at 1×). Wire types extended with typed `PerReceptorEntry`, `CrossMineEvalBlock`, `survivor_caveat`, `selection_caveat`, `cross_mine_eval`, `per_receptor`, `canary_metrics` fields. 10 vitest cases.
+
 **Phase S.2 — Logreg attribution auto-promotion (2026-05-03).**
 Status: complete. End of Phase S — and end of the autonomous P→Q→R→S batch run. New `app/domain/attribution_promotion.py:maybe_promote_logreg` checks for a fitted artifact at `data_models/source_attribution/<version>/head.joblib`; if present, runs a deterministic downwind/upwind probe; if the probe both ranks downwind first AND reports `evidence_class != "expert_judgment"`, promotes logreg to current. The bootstrap deliberately does NOT auto-fit — fitting is an operator action (a future Phase S.3 ships `scripts/train_attribution.py` once a labelled corpus exists). Wired into the FastAPI lifespan hook alongside `maybe_promote_gbm` + `maybe_promote_ap42`. Tolerant by design: any exception leaves rules baseline as current. With 0 `SourceAttribution` rows in the dev DB, the future Phase S.3 calibration branch (compare logreg vs rules accuracy on labelled rows) is documented but not exercised. 5 new in-memory promotion tests using `unittest.mock.patch` over `logreg_artifact_path` to control disk state per test. Risks introduced: artifact-driven promotion means the operator must run training before logreg goes live; this is honest. Risks retired: rules-baseline-only attribution lock-in.
 
