@@ -1,8 +1,8 @@
 # DustOps AI — Session Handoff
 
 **As of:** 2026-05-03
-**Active phase:** Phase R.2 complete — intervention calibration in honest-deferral mode (SG-3 fired: 0 ActionOutcome rows). AP-42 promoted to `current` via sanity-band fallback. End of Phase R. Autonomous P→Q→R→S continues with S.1 (real source attribution).
-**Last completed:** R.2 — `validate_intervention_calibration` + `maybe_promote_ap42` wired into the lifespan hook; `docs/intervention-physics.md` is the binding contract.
+**Active phase:** Phase S.1 complete — `LogRegAttributor` registered alongside the rules baseline; cold-start at parity, fitted-artifact path drives EvidenceClass upgrades. Autonomous P→Q→R→S continues with S.2 (promotion).
+**Last completed:** S.1 — logreg attributor + `train_logreg_attributor` + EvidenceClass assignment rule + 6 tests.
 **Validation gate:** `npm run agent-check` GREEN, **22 PASS / 0 SKIP / 0 FAIL**.
 
 ---
