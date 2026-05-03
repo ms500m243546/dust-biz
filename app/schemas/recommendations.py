@@ -74,3 +74,8 @@ class RecommendationSchema(BaseModel):
     # Convenience field for the dashboard; derivable from
     # `recommended_actions[0]` if needed.
     top_production_impact: ProductionImpact | None = None
+    # M.3.1 — causal-protocol confidence (penalty-adjusted relative to
+    # predictive `confidence`). The dashboard shows both side-by-side
+    # so a supervisor can see the gap between "the model thinks this
+    # will work" and "the model has causal evidence it will work."
+    causal_confidence: float = Field(default=0.5, ge=0.0, le=1.0)

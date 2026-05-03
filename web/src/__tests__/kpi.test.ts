@@ -26,6 +26,7 @@ function rec(id: string, tonnes = 100): RecommendationSchema {
     confidence: 0.7, reason: '', model_version: 'v1', feature_pipeline_version: 'v1',
     input_data_quality_score: 1, data_quality_warnings: [], linked_prediction_ids: [],
     linked_attribution_id: null, automation_level: 'L1', top_production_impact: null,
+    causal_confidence: 0.5,
   };
 }
 

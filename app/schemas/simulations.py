@@ -38,6 +38,14 @@ SimulationSource = Literal["model", "heuristic"]
 ProductionImpact = Literal["low", "medium", "high"]
 BottleneckRisk = Literal["low", "medium", "high"]
 
+# M.3.1 — causal-protocol simulation method. See docs/causal-protocol.md.
+SimulationMethod = Literal[
+    "naive_correlation",
+    "dispersion_model",
+    "propensity_matched",
+    "rct",
+]
+
 
 class InterventionImpactSchema(BaseModel):
     """S9 model output shape.
@@ -105,3 +113,11 @@ class InterventionSimulationSchema(BaseModel):
     cost_model_version: str
     source: SimulationSource = "heuristic"
     main_uncertainty: str | None = None
+    # M.3.1 — causal-protocol disclosure. `simulation_method` names how
+    # the impact estimate was produced; `counterfactual_assumption` is
+    # the operator-readable disclosure of the assumed no-action world;
+    # `selection_bias_caveat` is True when the cost calibration
+    # over-represents operator-acted interventions (the common case).
+    simulation_method: SimulationMethod = "naive_correlation"
+    counterfactual_assumption: str = ""
+    selection_bias_caveat: bool = True

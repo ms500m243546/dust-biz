@@ -29,6 +29,20 @@ export type ZoneActivity =
 export type DustGenerationPotential = 'low' | 'medium' | 'high' | 'unknown';
 export type WindExposure = 'low' | 'medium' | 'high' | 'unknown';
 
+// M.3.1 — causal-protocol evidence class. Strongest -> weakest.
+export type EvidenceClass =
+  | 'experimental'
+  | 'quasi_experimental'
+  | 'observational_correlational'
+  | 'expert_judgment';
+
+// M.3.1 — causal-protocol simulation method.
+export type SimulationMethod =
+  | 'naive_correlation'
+  | 'dispersion_model'
+  | 'propensity_matched'
+  | 'rct';
+
 export interface UserSchema {
   user_id: string;
   username: string;
@@ -76,6 +90,8 @@ export interface SourceAttributionSchema {
   evidence_fields: Record<string, unknown>;
   confidence: number;
   model_version: string;
+  // M.3.1 — see docs/causal-protocol.md.
+  evidence_class: EvidenceClass;
 }
 
 export interface RecommendationActionSchema {
@@ -112,6 +128,75 @@ export interface RecommendationSchema {
   linked_attribution_id: string | null;
   automation_level: string;
   top_production_impact: string | null;
+  // M.3.1 — penalty-adjusted causal confidence vs predictive `confidence`.
+  causal_confidence: number;
+}
+
+export interface InterventionSimulationSchema {
+  simulation_id: string;
+  requested_at: string;
+  intervention_id: string;
+  target_zone_id: string;
+  scenario: string;
+  predicted_pm10_reduction: number;
+  predicted_pm25_reduction: number | null;
+  breach_probability_before: number;
+  breach_probability_after: number;
+  time_to_effect_minutes: number;
+  production_loss_tonnes: number;
+  cycle_time_increase_percent: number;
+  production_impact: 'low' | 'medium' | 'high';
+  confidence: number;
+  model_version: string;
+  cost_model_version: string;
+  source: 'model' | 'heuristic';
+  main_uncertainty: string | null;
+  // M.3.1.
+  simulation_method: SimulationMethod;
+  counterfactual_assumption: string;
+  selection_bias_caveat: boolean;
+}
+
+// M.4.1 — calibration reliability bin (10-bin reliability table).
+export interface CalibrationBin {
+  lower: number;
+  upper: number;
+  count: number;
+  avg_predicted: number;
+  actual_frequency: number;
+}
+
+export interface ModelPerformanceMetricSchema {
+  metric_id: number;
+  model_version: string;
+  model_kind: string;
+  evaluated_at: string;
+  window_from: string;
+  window_to: string;
+  sample_count: number;
+  metric_payload: {
+    sample_count?: number;
+    observed_count?: number;
+    mae_pm10?: number | null;
+    breach_precision?: number | null;
+    breach_recall?: number | null;
+    calibration_error?: number | null;
+    // M.4.1.
+    calibration_bins?: CalibrationBin[];
+    ece?: number | null;
+    brier_score?: number | null;
+    avoided_shutdowns_estimate?: number;
+    production_loss_tonnes_total?: number;
+    protocol?: {
+      protocol_version?: string;
+      protocol_hash?: string;
+      split_strategy?: string;
+      max_ece?: number;
+      warnings?: string[];
+      [key: string]: unknown;
+    };
+    [key: string]: unknown;
+  };
 }
 
 export interface RecommendationApprovalSchema {

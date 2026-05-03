@@ -11,6 +11,7 @@ import type {
   ActionOutcomeSchema,
   DustEventSchema,
   InterventionEffectiveness,
+  ModelPerformanceMetricSchema,
 } from './types';
 
 const TOKEN_KEY = 'dustops.token';
@@ -131,4 +132,7 @@ export const api = {
     const s = q.toString();
     return request<AuditLogSchema[]>(`/audit${s ? `?${s}` : ''}`);
   },
+
+  modelPerformance: () =>
+    request<ModelPerformanceMetricSchema[]>('/model-performance'),
 };

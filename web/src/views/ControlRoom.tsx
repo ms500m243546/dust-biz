@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import { CalibrationBadge } from '../components/CalibrationBadge';
 import { Card } from '../components/Card';
 import { ConfidenceBadge } from '../components/ConfidenceBadge';
 import { ErrorBoundary } from '../components/ErrorBoundary';
+import { EvidenceChip } from '../components/EvidenceChip';
 import { breachProbabilityToStatus, riskClassToStatus, StatusPill } from '../components/StatusPill';
 import { useApi } from '../hooks/useApi';
 import { api } from '../api/client';
@@ -16,11 +18,22 @@ export function ControlRoom() {
   const mineState = useApi(() => api.mineStateCurrent().catch(() => null), 30_000);
   const sensorHealth = useApi(() => api.sensorHealth(), 60_000);
   const events = useApi(() => api.dustEvents(), 60_000);
+  const performance = useApi(() => api.modelPerformance().catch(() => null), 5 * 60_000);
   const [decisionMode, setDecisionMode] = useState<null | 'approve' | 'reject' | 'override'>(null);
 
   const f = forecast.data;
   const r = recommendation.data;
   const primaryAction = r?.recommended_actions[0] ?? null;
+  // M.4.1 — pick the latest performance row for the active forecast model.
+  const latestMetric =
+    performance.data?.find((m) => m.model_version === f?.model_version) ??
+    performance.data?.[0] ??
+    null;
+  const latestPayload = latestMetric?.metric_payload;
+  const latestProtocol = latestPayload?.protocol;
+  const calibrationOverrideReason = (latestProtocol?.warnings ?? []).find((w) =>
+    /calibration acceptance gate overridden/.test(w),
+  ) ?? null;
 
   return (
     <div className="view-grid view-grid-control">
@@ -60,7 +73,10 @@ export function ControlRoom() {
           {attributions.data && attributions.data.length === 0 && <p className="muted">No attributions yet.</p>}
           {attributions.data?.slice(0, 1).map((a) => (
             <div key={a.attribution_id}>
-              <ConfidenceBadge confidence={a.confidence} />
+              <div className="badge-row">
+                <ConfidenceBadge confidence={a.confidence} />
+                <EvidenceChip evidenceClass={a.evidence_class} />
+              </div>
               <ol className="cause-list">
                 {a.probable_sources.slice(0, 3).map((src, i) => (
                   <li key={i}>
@@ -109,7 +125,15 @@ export function ControlRoom() {
                 <li>Production loss: <strong>{primaryAction.production_loss}</strong></li>
                 <li>Intervention: <code>{primaryAction.intervention_id}</code></li>
               </ul>
-              <ConfidenceBadge confidence={r.confidence} note={r.compliance_priority_triggered ? 'compliance priority' : undefined} />
+              <div className="badge-row">
+                <ConfidenceBadge confidence={r.confidence} note={r.compliance_priority_triggered ? 'compliance priority' : 'predictive'} />
+                <ConfidenceBadge confidence={r.causal_confidence} note="causal" />
+                <CalibrationBadge
+                  ece={(latestPayload?.ece as number | null | undefined) ?? null}
+                  maxEce={latestProtocol?.max_ece}
+                  overrideReason={calibrationOverrideReason}
+                />
+              </div>
               <p className="reason">{r.reason}</p>
               {r.recommended_actions.length > 1 && (
                 <details>

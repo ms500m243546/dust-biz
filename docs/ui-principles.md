@@ -91,6 +91,31 @@ Never use red for anything other than risk. No marketing red.
 Every prediction or recommendation card shows a confidence percentage
 and a one-line uncertainty note. Never hide confidence.
 
+For recommendations (M.3.1+), show **two** confidences side-by-side:
+the predictive `confidence` and the causal-protocol `causal_confidence`
+(penalty-adjusted per `docs/causal-protocol.md`). The pairing exposes
+the gap between "the model thinks this will work" and "the model has
+causal evidence it will work" — load-bearing while we operate on
+single-station observational data.
+
+### Evidence-class chip
+Every attribution card and recommendation card surfaces an
+`EvidenceChip` (M.3.1). The chip labels the evidence class
+(`EXPERIMENTAL`, `QUASI-EXPERIMENTAL`, `OBSERVATIONAL`,
+`EXPERT JUDGMENT`) and tiers it visually (strong = green, weak =
+yellow). Hover tooltip explains what causal claims the class can and
+cannot support. Never collapse the chip into a row that hides at
+narrow widths — operators making intervention decisions must see it.
+
+### Calibration badge
+Every recommendation card and the compliance dashboard surface a
+`CalibrationBadge` (M.4.1) driven by the latest persisted
+`model_performance_metrics.metric_payload.ece` for the active model.
+Three tiers: `CAL OK` (ECE ≤ 50% of `max_ece`), `CAL MARGINAL`
+(in-gate but high), `CAL OVERRIDE` (over-gate; only possible when an
+operator override reason was supplied — the override reason is shown
+in the tooltip). Defensive `CAL UNKNOWN` when no metric row exists.
+
 ### Reason display
 Every recommendation shows the human-readable reason from S12. Never
 collapse it into a tooltip. The operator must see it.

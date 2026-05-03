@@ -11,9 +11,16 @@ guardrail-3 spirit at the per-source level.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+EvidenceClass = Literal[
+    "experimental",
+    "quasi_experimental",
+    "observational_correlational",
+    "expert_judgment",
+]
 
 
 class ProbableSource(BaseModel):
@@ -44,3 +51,6 @@ class SourceAttributionSchema(BaseModel):
     evidence_fields: dict[str, Any] = Field(default_factory=dict)
     confidence: float = Field(ge=0.0, le=1.0)
     model_version: str
+    # M.3.1 — causal-protocol evidence class. See docs/causal-protocol.md.
+    # Default `observational_correlational` matches the storage default.
+    evidence_class: EvidenceClass = "observational_correlational"

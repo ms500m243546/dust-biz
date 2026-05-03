@@ -70,6 +70,17 @@ code { font-family: 'SF Mono', Menlo, monospace; font-size: 0.9em; background: r
 .confidence-mid .confidence-pct { color: var(--yellow); }
 .confidence-low .confidence-pct { color: var(--red); }
 
+.evidence-chip { font-size: 0.7em; font-weight: 700; padding: 2px 7px; border-radius: 8px; letter-spacing: 0.4px; cursor: help; }
+.evidence-strong { background: #e0f0e3; color: var(--green); }
+.evidence-weak { background: #fcf2dc; color: #8c6914; }
+
+.calibration-badge { display: inline-flex; gap: 6px; align-items: baseline; font-size: 0.7em; font-weight: 700; padding: 2px 7px; border-radius: 8px; letter-spacing: 0.3px; cursor: help; }
+.calibration-badge .calibration-ece { font-weight: 500; opacity: 0.8; font-family: monospace; }
+.calibration-good { background: #e0f0e3; color: var(--green); }
+.calibration-marginal { background: #fcf2dc; color: #8c6914; }
+.calibration-over { background: #fbe2e2; color: var(--red); }
+.calibration-unknown { background: #ececec; color: var(--muted); }
+
 .warning-row { background: #fcf2dc; color: #8c6914; padding: 6px 10px; border-radius: 4px; font-size: 0.85em; }
 
 .big-metric { display: flex; align-items: baseline; gap: 8px; }
@@ -77,6 +88,7 @@ code { font-family: 'SF Mono', Menlo, monospace; font-size: 0.9em; background: r
 .big-metric .unit { color: var(--muted); }
 
 .action-headline { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.badge-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; }
 .action-metrics { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; font-size: 0.9em; }
 .reason { font-style: italic; color: var(--muted); border-left: 2px solid var(--border); padding-left: 8px; margin: 6px 0; }
 
