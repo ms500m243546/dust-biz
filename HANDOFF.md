@@ -1,191 +1,182 @@
 # DustOps AI — Session Handoff
 
 **As of:** 2026-05-03
-**Active phase:** **Phase W.2 complete — END of the autonomous T→W batch run.** 11 more sub-phase commits on top of the prior P→Q→R→S batch (21 sub-phase commits total this session). Operator-trust UI surfaces, physics-informed cost model, end-to-end integration validation, and continuous re-training loop all landed.
-**Last completed:** W.2 — drift-triggered retrain endpoint + audit-trail behaviour; 7 new tests.
-**Validation gate:** `npm run agent-check` GREEN, **22 PASS / 0 SKIP / 0 FAIL**.
+**Active phase:** **Phase W.2 complete — END of T→W batch.** 21 sub-phase commits this session across 8 phases (P → Q → R → S → T → U → V → W). System now has real models at every learnable layer (forecast / intervention / cost) + bias mitigations + UI surfaces + continuous-learning hooks.
+**Last completed:** W.2 — drift-triggered retrain endpoint + audit-trail behaviour.
+**Validation gate:** `npm run agent-check` GREEN, **22 PASS / 0 SKIP / 0 FAIL**. 6XX backend tests + 46 web tests.
 
 ---
 
 ## State at handoff
 
-- Phase O.1 changes uncommitted (8 files: `app/storage/models/mine.py`, `app/schemas/equipment.py`, `tests/schemas/test_equipment.py`, `docs/data-contracts.md`, `docs/normalization_report.md`, this handoff, plus created `scripts/migrate_equipment_truck_geometry.py` and `docs/training-features.md`). Phase N was committed as `9670a9f`.
+- Working tree clean. All 21 sub-phases committed.
 - Recent commits (newest first):
-  - `9670a9f` Phase N — drift-watch UI surfacing
-  - `892fda3` Phase M.4.3 — drift watch (B-12)
-  - `58097e6` Phase M.4.2 — fairness + Goodhart canaries (B-32, B-44)
-  - `acac35b` Phase M.3.2 — UI surfacing of causal + calibration fields
-  - `ad5c7f0` Phase M.4.1 — calibration acceptance gate + covariate discipline (B-30, B-18)
-- Rollback log: `phase-m4-1-pre-calibration`, `phase-m4-2-pre-fairness`, `phase-m4-3-pre-drift`, `phase-n-pre-drift-ui`, `phase-o1-pre-equipment-schema`.
-- DB state: O.1 migration ran on dev SQLite — `equipment` now carries 4 new nullable columns (`empty_weight_tonnes`, `tire_contact_area_m2`, `tire_count`, `axle_count`). All NULL until per-mine back-fill. Idempotent.
-- Real-data on-ramp progress (this session): 17,568 Open-Meteo weather records (2025-05-03 → 2026-05-03 at mine-centroid + Cuncumén met point) + SINCA Cuncumén 424 PM10 series (8,603 hourly records over the same window) + confirmation that the other 8 SINCA Choapa stations are still empty in 2026.
-- Memory: new `project_phase_o1_complete.md` should supersede `project_phase_n_complete.md`.
-
-## What shipped in Phase O.1
-
-- `app/storage/models/mine.py:Equipment` — 4 new nullable columns (`empty_weight_tonnes`, `tire_contact_area_m2`, `tire_count`, `axle_count`) for AP-42 unpaved-haul-road inputs.
-- `app/schemas/equipment.py:EquipmentSchema` — Pydantic mirror with `ge=0.0` / `ge=0` validators.
-- `scripts/migrate_equipment_truck_geometry.py` — idempotent ALTER TABLE; ran successfully on `dustops.db`.
-- `tests/schemas/test_equipment.py` — 3 new cases (legacy nullable round-trip, populated round-trip with Komatsu 930E reference values, negative-value rejection).
-- `docs/training-features.md` — new file mapping every feature variable a real model would consume to its column or remaining gap (atmospheric, particulate ground truth, AP-42 haul-truck, mine state). Includes per-mine back-fill convention with reference truck datasheets (Komatsu 930E/980E, Cat 793F/797F).
-- `docs/data-contracts.md` — Equipment row updated.
-
-**Scope deliberately trimmed**: no `feature_pipeline.py` change. Real-model integration of these features is whichever Phase first trains a real model — premature to wire them in now per CLAUDE.md "no half-finished implementations" / "no design for hypothetical future requirements." The schema is ready, that's enough.
-
----
-
-## What shipped in Phase N
-
-- `web/src/views/Drift.tsx` — single-card drift dashboard. Polls `GET /api/v1/drift` every 60s; defaults `model_version` to the most recent `modelPerformance()` row; window picker 14 / 30 / 90 days. Per-row severity tier yellow ≥ 1× threshold ("NOTICE") / red ≥ 2× threshold ("ACT"); card border tracks the worst tier. Two distinct empty states ("No model_performance rows yet" vs "No drift detected in window"). Detection-only — no approve/reject controls.
-- `web/src/api/types.ts` — `DriftAlertSchema` added (mirror of backend `app/schemas/drift.py`).
-- `web/src/api/client.ts` — `api.driftAlerts({ model_version, since_days, min_samples })` method.
-- `web/src/views/Layout.tsx` — nav link "Drift" rendered only when `user.role ∈ { environmental_manager, admin }`.
-- `web/src/App.tsx` — `/drift` route wrapped in `RoleGate`; non-allowed roles redirect to `/control-room`.
-- `web/src/__tests__/drift.test.tsx` — 8 vitest cases: severity helper, version dedup, alerts table, no-drift empty state, window-switch refetch, error row, model-performance-empty empty state.
-- `docs/ui-principles.md` — annex section "Drift view (Phase N — env_manager + admin only)".
-- `docs/normalization_report.md` — Phase N entry promoted to Active.
-
-**Why a useEffect-driven reload inside `Drift.tsx`:** `useApi`'s `reload` is bound on mount with `useCallback([])`, so it does not naturally re-trigger when the `fetchDrift` closure changes (model_version / since_days picker). The component calls `drift.reload()` from a small effect tied to those state values; `fnRef` inside `useApi` is already kept current. Documented inline; consider lifting into `useApi` later if a second view needs the same pattern.
-
-## What shipped in the M.4 block
-
-### M.4.1 — Calibration acceptance gate + covariate discipline
-
-- `EvaluationProtocol` extended: `feature_set`, `required_covariates`, `forbidden_covariates`, `max_ece` (default **0.05**), `ece_override_reason`. The four hashed fields enter `protocol_hash`; override reason is a non-hashed audit annotation.
-- `compute_metric_payload` now emits `calibration_bins[]` (10-bin reliability per Niculescu-Mizil & Caruana 2005), `brier_score`, `ece`. `ece > max_ece` raises `ProtocolViolation` unless an override reason is supplied (logged on the metric row).
-- `validate_protocol_obeyed` adds anti-overfit rule 9: required covariates ⊆ `feature_set`; forbidden ones not in `feature_set`.
-- `PROTOCOL_VERSION` bumped from "M.1" to "M.4".
-- `validate-overfit-discipline.js` enforces calibration + covariate fields on M.4-tagged rows; M.1/M.2/M.3 rows tolerated.
-- Bias register: B-30, B-18 → **Mitigated (M.4.1)**.
-
-### M.3.2 — UI surfacing
-
-- Backend schemas threaded: `SourceAttributionSchema.evidence_class`, `RecommendationSchema.causal_confidence`, `InterventionSimulationSchema.{simulation_method, counterfactual_assumption, selection_bias_caveat}` — all defaulting to storage defaults so existing API consumers keep working.
-- Web wire types extended; new `api.modelPerformance()` client method.
-- New components: `web/src/components/EvidenceChip.tsx` (strong/weak tier per evidence class with hover tooltip) and `web/src/components/CalibrationBadge.tsx` (good/marginal/over driven by ECE vs `max_ece`, surfaces override reason).
-- Wired into `ControlRoom` (Likely-cause card → evidence chip; Recommended-action card → predictive + causal confidence pair + calibration badge) and `Compliance` (new Source-attributions card; new Model-calibration card).
-- `docs/ui-principles.md` adds rules for the evidence-chip and calibration-badge surfaces.
-
-### M.4.2 — Fairness audit + Goodhart canaries
-
-- `metric_payload` gains `per_receptor` (same headline metrics split by `target_id`) and `canary_metrics` (every deployable KPI paired with a counter-metric whose drift reveals gaming).
-- `GOODHART_CANARY_PAIRS` constant: `breach_precision↔breach_recall`, `false_positive_rate↔breach_recall`, `avoided_shutdowns_estimate↔false_negative_rate`, `production_loss_tonnes_total↔breach_recall`.
-- `docs/safety-guardrails.md` adds two new sections — Goodhart-canary discipline (**binding on automation-promotion decisions**) and per-receptor fairness audit.
-- Bias register: B-32, B-44 → **Mitigated (M.4.2)**.
-
-### M.4.3 — Drift watch
-
-- New `app/domain/drift_watch.py:compute_drift` — splits `model_performance_metrics` rows for one `model_version` into baseline (oldest half) + recent (newest half) and emits one `DriftAlert` per metric whose median crosses the per-metric threshold in `DRIFT_THRESHOLDS`.
-- Threshold table: `mae_pm10` 5.0 µg/m³, probability metrics (recall/precision/FPR/FNR) 10pp, `ece` 0.025, `calibration_error` 0.05.
-- New `GET /api/v1/drift?model_version=&since_days=14&min_samples=4`, auth-gated. Detection-only; operational alerting and "most-recent-N-years" retraining are post-M.
-- New validator `scripts/checks/validate-drift-discipline.js` (#21 in the gate).
-- Bias register: B-12 → **Mitigated (M.4.3)**.
+  - `16c7ace` Phase W.2 — drift-triggered retrain endpoint
+  - `6cbeb64` Phase W.1 — scheduled weekly retrain
+  - `b0d7f67` Phase V.3 — confidence-propagation regression suite
+  - `2fd22cd` Phase V.2 — audit-trail model_version consistency
+  - `25d37c2` Phase V.1 — registry-state integration tests
+  - `84cf2af` Phase U.2 — cycle-time cost auto-promotion
+  - `8216d78` Phase U.1 — cycle-time-aware cost model
+  - `2f3bbce` Phase T.3 — EvidenceClass distribution chart
+  - `c723b69` Phase T.2 — multi-station caveat banners
+  - `93a6835` Phase T.1 — per-receptor fairness panel
+  - `922ca79` Phase S.2 — logreg attribution auto-promotion
+  - `a21e474` Phase S.1 — logreg source-attribution model
+  - `49da735` Phase R.2 — intervention calibration + AP-42 promotion
+  - `5c95fa8` Phase R.1 — AP-42 physics intervention model
+  - `dbd71eb` Phase Q.3 — multi-station discipline (B-5/B-6/B-14 closure)
+  - `3f7ede3` Phase Q.2 — shared multi-station GBM
+  - `f2597e3` Phase Q.1 — multi-station GBM expansion
+  - `6304954` Phase P.3 — GBM auto-promotion via lifespan hook
+  - `a996275` Phase P.2 — real GBM fit on Cuncumén
+  - `1b33207` Phase P.1 — first trained-forecast scaffold
+  - `d1fbec1` Phase O.2 — multi-mine SINCA survey + connector fix
+- Rollback log spans `phase-p1-pre-scaffold` through `phase-w2-pre-drift-retrain` — one snapshot per sub-phase.
+- DB state: 4 new nullable columns on `equipment` (O.1, AP-42 inputs). 6 `model_performance_metrics` rows persisted (5 per-station GBM + 1 shared). Heuristic baselines remain registered as fallbacks per Guardrail 11 at every layer.
 
 ---
 
-## Bias-register status (post-M.4)
+## Real-data corpus driving the models
 
-| ID | Bias | Status | Phase |
+- **PM10 sensor readings**: 148,752 (PIT-versioned)
+- **Weather readings**: 70,272 (Open-Meteo / ERA5)
+- **Mines registered**: 5 (Los Pelambres, Los Bronces, Chuquicamata, Centinela, +baseline)
+- **Sensor stations**: 22 (5 SINCA-public with real PM10 data)
+
+12-month corpus by station (the training corpus):
+
+| Station | Mine | Records | Density |
 |---|---|---|---|
-| B-12 | Concept drift | **Mitigated** | M.4.3 |
-| B-18 | Confounding | **Mitigated** | M.4.1 |
-| B-30 | Confidence miscalibration | **Mitigated** | M.4.1 |
-| B-32 | Receptor-priority asymmetry | **Mitigated** | M.4.2 |
-| B-44 | Goodhart on the deployed metric | **Mitigated** | M.4.2 |
-
-**Still open** (mostly post-M / multi-station-required):
-- B-5 / B-6 (survivorship + selection — needs ≥ 2 SINCA stations).
-- B-7 (sampling bias — sensor-offline correlates with weather extremes).
-- B-13 (calibration drift over years — partial via PIT versioning).
-- B-14 (Los Pelambres → Los Bronces distribution shift).
-- B-25 (recency bias in retraining — partial via covariate discipline).
-- B-29 (stationarity claim).
-- B-31 (Simpson's paradox / aggregation).
-- B-35 (Chile DST transitions).
-- B-40 (schema drift in old RCAs).
-- B-42 (RCA label noise).
+| `chq-club-23-marzo` | Chuquicamata | 8,670 | ~99% |
+| `lp-em05-cuncumen` | Los Pelambres | 8,604 | ~98% |
+| `cnt-sierra-gorda` | Centinela | 7,017 | ~80% |
+| `lb-las-condes` | Los Bronces | 6,959 | ~79% |
+| `chq-calama-centro` | Chuquicamata | 5,764 | ~66% (skipped per-station, included in shared) |
 
 ---
 
-## Open work / next steps
+## Models currently `current` on the dev DB
 
-| ID | Severity | Summary | Resolution |
-|---|---|---|---|
-| **M.3.3** | medium-latent | True intervention-window cutoff (`ActionOutcome.intervention_window`) once operator-real telematics lands | Phase M.3.3 — depends on Antofagasta partnership data flow |
-| L.M1-R1 | medium | 12-month Open-Meteo live pull not yet executed (network was unreachable) | Operator-runnable; idempotent under M.2 orchestrator |
-| L7a-R1 | medium | Only 1 of 9 nearby SINCA stations has real data | Antofagasta partnership or SMA SEIA scrape |
-| L5-carryover | medium-latent | Equipment-side ingest is the bottleneck | `operator_real` adapter ready; needs partnership data flow |
+After the FastAPI lifespan hook runs:
 
-**Concrete next session priorities:**
+| Layer | `current` model | Promotion path |
+|---|---|---|
+| Forecast | `dust_forecast_gbm_v0.1.0` | P.3 — `decide_promotion()` over latest M.4 metric row passed |
+| Intervention impact | `intervention_impact_ap42_v0.1.0` | R.2 — sanity-band probe passed (deferred mode, 0 outcomes) |
+| Production cost | `production_cost_cycle_time_v0.1.0` | U.2 — sanity-band probe passed |
+| Source attribution | `source_attribution_rules_v0.1.0` (baseline) | S.2 — held; no logreg artifact persisted on dev DB |
 
-1. **Commit Phase O.1** (8 files; rollback snapshot `phase-o1-pre-equipment-schema` already taken).
-2. **Phase O.2 — multi-mine SINCA survey** (next on the data on-ramp). Survey SINCA's Coquimbo/Atacama/Antofagasta region station list for hourly/daily PM10 stations near *other* target mines (Codelco / BHP Escondida / Anglo). New YAML + 12mo pull. Cheap engineering (~1 day); unblocks Phase O proper, AERMOD/CALPUFF dispersion, and second-mine work. *Only if 2 fails to find ≥ 2 viable stations*: Phase O.3 — SMA SEIA scrape (PDF parsing, real engineering).
-3. **Per-mine back-fill of Phase O.1 columns** for Los Pelambres fleet (one-time data exercise; needs operator fleet roster or OEM datasheet research).
-4. **Phase O proper** — post-M biases that bite at second-mine deployment (B-5 / B-6 / B-14). Gated on O.2.
-5. **Real model training (Phase P proposed)** — replace the heuristic `DustForecastModel` with an actual ML model trained on real Cuncumén PM10 + Open-Meteo weather. M.4 calibration gate, M.4.3 drift watch, and M.3.1 causal discipline finally start earning their keep. Gated on O.2 + O.1 back-fill.
-6. **Phase M.3.3** — true intervention-window cutoff. Still blocked on operator-real telematics (Antofagasta partnership).
-7. **Phase N follow-ups (deferred):** alert acknowledgement / persistence, per-metric filtering, feature-distribution drift (PSI/KL).
+To promote logreg attribution: train it via `train_logreg_attributor` against a candidate corpus, then re-bootstrap.
 
 ---
 
-## How a model declares the M.4 protocol surface
+## Headline forecast performance (sealed test 2026-04-01 → 2026-05-03)
 
-```python
-from app.domain.evaluation_protocol import EvaluationProtocol
+### Per-station GBM (`dust_forecast_gbm_v0.1.0`)
 
-protocol = EvaluationProtocol(
-    split_strategy="walk_forward",
-    train_window_from=...,
-    train_window_to=...,
-    validation_window_from=...,
-    validation_window_to=...,
-    test_window_from=...,
-    test_window_to=...,
-    # M.4.1 — covariate discipline
-    feature_set=("pm10_lag1", "humidity", "wind_speed"),
-    required_covariates=("humidity",),  # B-18 mitigation
-    forbidden_covariates=("validated_pm10_col3",),  # B-2 hindsight block
-    # M.4.1 — calibration acceptance gate
-    max_ece=0.05,  # default; override below requires reason
-    # ece_override_reason="diagnostic only - not promoted",
-    # M.3 — causal-protocol opt-in (default False)
-    causal_intent=False,
-)
-```
+| Station | test_n | ECE | MAE PM10 | breach_recall |
+|---|---|---|---|---|
+| `lp-em05-cuncumen` | 758 | ~2e-15 | **9.25 µg/m³** | n/a* |
+| `lb-las-condes` | 427 | 0.0023 | **11.29 µg/m³** | 0.00 |
+| `chq-club-23-marzo` | 757 | 0.0 | **1.68 µg/m³** | n/a* |
+| `cnt-sierra-gorda` | 767 | 0.0143 | **26.09 µg/m³** | 0.10 |
 
-`metric_payload` rows under M.4 carry: `calibration_bins[]`, `ece`, `brier_score`, `per_receptor`, `canary_metrics`, plus the M.1/M.2/M.3 fields. `validate-overfit-discipline.js` enforces presence on every M.4-tagged row.
+\* No breach events in the sealed window (B-8 class imbalance — expected).
+
+### Shared multi-station GBM (`dust_forecast_gbm_shared_v0.1.0`)
+
+| Aggregate | Value |
+|---|---|
+| Train rows | 30,017 |
+| Test rows | 2,709 |
+| Aggregate ECE | **0.003** |
+| Aggregate MAE PM10 | **11.05 µg/m³** |
+| Aggregate breach_recall | **0.091** |
+
+Per-receptor MAE in the shared model **wins on every station and gains most on the noisiest** (Sierra Gorda 26.09 → 22.40). Cross-station signal is doing real work.
 
 ---
 
-## How to query drift
+## Bias register status
 
-```bash
-GET /api/v1/drift?model_version=dust_forecast_v0.1.0&since_days=30&min_samples=4
-```
+| ID | Status | Phase |
+|---|---|---|
+| B-5 (survivorship) | **Mitigated** | Q.3 |
+| B-6 (selection) | **Mitigated** | Q.3 |
+| B-12 (concept drift) | **Mitigated** | M.4.3 |
+| B-14 (distribution shift) | **Mitigated** | Q.3 |
+| B-18 (confounding) | **Mitigated** | M.4.1 |
+| B-30 (calibration) | **Mitigated** | M.4.1 |
+| B-32 (receptor asymmetry) | **Mitigated** | M.4.2 |
+| B-44 (Goodhart) | **Mitigated** | M.4.2 |
 
-Returns a list of `DriftAlertSchema` (one per metric whose median crossed its threshold in the most recent half of the window). Empty list = no detected drift in the window.
+8 numbered biases now have code-level mitigations enforced by the agent-check gate.
+
+Still open (gated on partnership data or net-new engineering):
+- B-7 (sampling bias when sensor offline correlates with weather)
+- B-13 (long-term calibration drift)
+- B-25 (recency bias in retraining — partial via covariate discipline)
+- B-29 (stationarity claim)
+- B-31 (Simpson's paradox / aggregation)
+- B-35 (Chile DST)
+- B-40 / B-42 (RCA schema drift / label noise)
 
 ---
 
-## Key references (M.4 block)
+## Honest deferral list (partnership-gated, not engineering-gated)
 
-- **[app/domain/evaluation_protocol.py](app/domain/evaluation_protocol.py)** — M.4.1 fields, hash, validation
-- **[app/domain/model_performance.py](app/domain/model_performance.py)** — calibration bins, Brier, ECE, per_receptor, canary_metrics
-- **[app/domain/drift_watch.py](app/domain/drift_watch.py)** — `compute_drift`, `DRIFT_THRESHOLDS`, `DriftAlert`
-- **[app/schemas/drift.py](app/schemas/drift.py)** — `DriftAlertSchema`
-- **[app/api/routes/drift.py](app/api/routes/drift.py)** — `GET /api/v1/drift`
-- **[web/src/components/EvidenceChip.tsx](web/src/components/EvidenceChip.tsx)** — evidence-class chip
-- **[web/src/components/CalibrationBadge.tsx](web/src/components/CalibrationBadge.tsx)** — calibration badge
-- **[scripts/checks/validate-drift-discipline.js](scripts/checks/validate-drift-discipline.js)** — gate #21
-- **[docs/anti-overfit-protocol.md](docs/anti-overfit-protocol.md)** — rules 8 + 9 (calibration + covariates)
-- **[docs/safety-guardrails.md](docs/safety-guardrails.md)** — Goodhart-canary discipline + per-receptor fairness audit
-- **[docs/bias-register.md](docs/bias-register.md)** — B-12, B-18, B-30, B-32, B-44 all flipped to Mitigated
+| Gap | Blocker |
+|---|---|
+| AP-42 + cycle-time empirical calibration | 0 `ActionOutcome` rows; needs telematics |
+| Logreg attribution as `current` | No fitted artifact on dev DB; needs labelled corpus |
+| Real labelled `DustEvent` corpus | Partnership-gated |
+| Calama Centro per-station fit | 66% density; thin-station handling |
+| Per-receptor ECE breakdown | `_per_receptor_breakdown` only computes MAE/recall/precision/FPR |
+| AERMOD/CALPUFF dispersion | ≥ 2 receptors per mine; receptor-density gated |
+| Phase M.3.3 true intervention-window cutoff | Operator-real telematics |
+| Per-mine back-fill of O.1 truck geometry | OEM datasheet entry (one-time data exercise) |
+
+---
+
+## Concrete next-session priorities
+
+1. **Run the weekly retrain manually once** to confirm the lifespan hook + scheduler integration produce a fresh metric_payload row on the dev DB.
+2. **Train + persist a logreg attribution artifact** so S.2 can promote — operator runs `train_logreg_attributor` against a representative candidate pool (synthetic until a labelled corpus exists).
+3. **Per-mine back-fill of O.1 truck-geometry** for the Los Pelambres fleet — populate `empty_weight_tonnes`, `tire_count`, etc. from Komatsu / Cat datasheets per `docs/training-features.md`.
+4. **Phase X (proposed)** — promote the shared multi-station GBM to current. Currently `dust_forecast_gbm_v0.1.0` (per-station) is current; the shared variant beats it on per-receptor MAE for every station including the noisiest. Wire decide_promotion to compare versions.
+5. **Phase Y (proposed)** — class-imbalance mitigation for the breach classifier (Las Condes recall=0.0 is the tell). Options: class-weighted loss, lower decision threshold, focal loss. Also revisit the breach-decision threshold (currently 0.5) per receptor.
+6. **Antofagasta partnership conversation** — same blocker as last session. Real `ActionOutcome` rows would unlock R.2 / U.2 calibration mode, S.2 outcome-supervised training, and Phase O proper bias work.
+
+---
+
+## Key references (T → W block)
+
+- **[app/domain/training_scheduler.py](app/domain/training_scheduler.py)** — W.1 weekly retrain wiring
+- **[app/domain/drift_response.py](app/domain/drift_response.py)** — W.2 drift-triggered retrain
+- **[app/api/routes/drift_retrain.py](app/api/routes/drift_retrain.py)** — `POST /api/v1/drift/retrain` admin-only
+- **[app/domain/cost_promotion.py](app/domain/cost_promotion.py)** — U.2 cost auto-promotion via sanity band
+- **[app/models/cost/cycle_time_v0_1_0.py](app/models/cost/cycle_time_v0_1_0.py)** — U.1 physics-informed cost
+- **[app/domain/production_cost_physics.py](app/domain/production_cost_physics.py)** — U.1 pure-function physics
+- **[web/src/components/PerReceptorTable.tsx](web/src/components/PerReceptorTable.tsx)** — T.1
+- **[web/src/components/MultiStationCaveats.tsx](web/src/components/MultiStationCaveats.tsx)** — T.2
+- **[web/src/components/EvidenceDistribution.tsx](web/src/components/EvidenceDistribution.tsx)** — T.3
+- **[tests/integration/test_recommendation_with_real_models.py](tests/integration/test_recommendation_with_real_models.py)** — V.1
+- **[tests/domain/test_audit_model_version_consistency.py](tests/domain/test_audit_model_version_consistency.py)** — V.2
+- **[tests/domain/test_confidence_propagation.py](tests/domain/test_confidence_propagation.py)** — V.3
 
 ## Earlier-phase references (still current)
 
-- **[docs/causal-protocol.md](docs/causal-protocol.md)** — M.3.1 binding spec
-- **[docs/anti-hindsight-protocol.md](docs/anti-hindsight-protocol.md)** — M.1 + M.2 contracts
-- **[app/domain/causal_protocol.py](app/domain/causal_protocol.py)** — `EvidenceClass`, `SimulationMethod`, validators
-- **[app/domain/pit_query.py](app/domain/pit_query.py)** — `sensor_readings_as_of`, `weather_readings_as_of`, `features_pre_intervention`
-- **[scripts/migrate_pit_columns.py](scripts/migrate_pit_columns.py)** — M.2 PIT migration
-- **[scripts/migrate_causal_columns.py](scripts/migrate_causal_columns.py)** — M.3 schema migration
+- **[app/training/dust_forecast_training.py](app/training/dust_forecast_training.py)** — P.1/P.2/Q.1/Q.2 trainer
+- **[app/models/forecasting/gbm_v0_1_0.py](app/models/forecasting/gbm_v0_1_0.py)** — per-station GBM
+- **[app/models/forecasting/gbm_shared_v0_1_0.py](app/models/forecasting/gbm_shared_v0_1_0.py)** — shared multi-station GBM
+- **[app/domain/dust_forecast_promotion.py](app/domain/dust_forecast_promotion.py)** — P.3 forecast promotion
+- **[app/domain/intervention_promotion.py](app/domain/intervention_promotion.py)** — R.2 intervention promotion
+- **[app/domain/attribution_promotion.py](app/domain/attribution_promotion.py)** — S.2 attribution promotion
+- **[app/models/intervention/ap42_v0_1_0.py](app/models/intervention/ap42_v0_1_0.py)** — AP-42 model
+- **[app/domain/ap42_emission.py](app/domain/ap42_emission.py)** — AP-42 physics
+- **[app/models/attribution/logreg_v0_1_0.py](app/models/attribution/logreg_v0_1_0.py)** — logreg attribution
+- **[app/domain/model_performance.py](app/domain/model_performance.py)** — M.4 metric_payload + Q.3 caveats
+- **[docs/forecast-model-protocol.md](docs/forecast-model-protocol.md)** — P.1+ binding contract
+- **[docs/intervention-physics.md](docs/intervention-physics.md)** — R.1+/U.1+ binding contract
+- **[docs/bias-register.md](docs/bias-register.md)** — 8 numbered biases now Mitigated
