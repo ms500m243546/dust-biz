@@ -33,6 +33,11 @@ under `requires_human_review` if nothing else qualifies.
 from __future__ import annotations
 
 from app.domain.risk_classification import derive_risk_class
+from app.domain.temporal_trigger import (
+    DEFAULT_EFFECT_WINDOW_MINUTES,
+    ForecastTrackPoint,
+    decide_trigger_time,
+)
 from app.schemas.optimization import (
     PlanRelativeLossLabel,
     ProductionLossLabel,
@@ -100,6 +105,7 @@ class WeightedOptimizationEngine:
         cause_class: str | None = None,
         candidate_target_cause_classes: dict[str, list[str]] | None = None,
         shift_progress: ShiftProgressSchema | None = None,
+        forecast_track: list[ForecastTrackPoint] | None = None,
     ) -> RankedRecommendations:
         """Rank candidates by weighted score.
 
@@ -164,6 +170,9 @@ class WeightedOptimizationEngine:
                 cause_class=cause_class,
                 plan_relative_loss=_plan_relative_loss(
                     cand=cand, shift_progress=shift_progress
+                ),
+                trigger=_trigger_for_candidate(
+                    cand=cand, forecast_track=forecast_track
                 ),
             )
             for i, (cand, score, low_conf, cause_targeted, base, derived, reasons) in enumerate(scored)
@@ -233,6 +242,27 @@ def _apply_shift_slack_rescale(
     multiplier = 1.0 / clamped
     return weights.model_copy(
         update={"w_production": weights.w_production * multiplier}
+    )
+
+
+def _trigger_for_candidate(
+    *,
+    cand: InterventionSimulationSchema,
+    forecast_track: list[ForecastTrackPoint] | None,
+) -> object | None:
+    """Phase AC — pick start time per candidate.
+
+    Returns None when no forecast_track is supplied so the caller can
+    skip the field; the orchestrator falls back to the prior immediate-
+    execution path. The do-nothing baseline is allowed to compute a
+    trigger too (act_now=True is harmless).
+    """
+    if forecast_track is None:
+        return None
+    return decide_trigger_time(
+        forecast_track=forecast_track,
+        time_to_effect_minutes=cand.time_to_effect_minutes,
+        intervention_duration_minutes=DEFAULT_EFFECT_WINDOW_MINUTES,
     )
 
 
@@ -328,6 +358,7 @@ def _to_ranked(
     plan_relative_loss: PlanRelativeLossLabel | None = None,
     base_risk_class: str | None = None,
     risk_escalation_reasons: tuple[str, ...] = (),
+    trigger: object | None = None,
 ) -> RankedCandidate:
     breach_drop = max(0.0, breach_before - cand.breach_probability_after)
     parts: list[str] = []
@@ -362,6 +393,16 @@ def _to_ranked(
             f"risk escalated {base_risk_class}->{risk_class}"
         )
 
+    trigger_minutes = 0
+    act_now = True
+    trigger_reason: str | None = None
+    if trigger is not None:
+        trigger_minutes = int(getattr(trigger, "minutes_from_now", 0))
+        act_now = bool(getattr(trigger, "act_now", True))
+        trigger_reason = getattr(trigger, "reason", None)
+        if not act_now:
+            parts.append(f"wait {trigger_minutes} min before acting")
+
     risk_derivation = (
         RiskClassDerivation(
             base=base_risk_class,
@@ -387,6 +428,9 @@ def _to_ranked(
         cause_targeted=cause_targeted,
         plan_relative_loss=plan_relative_loss,
         risk_derivation=risk_derivation,
+        recommended_trigger_minutes_from_now=trigger_minutes,
+        act_now=act_now,
+        trigger_reason=trigger_reason,
     )
 
 

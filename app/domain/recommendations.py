@@ -47,6 +47,7 @@ from app.domain.simulation import (
     simulate_intervention,
 )
 from app.domain.site_config_resolver import require_resolved
+from app.domain.temporal_trigger import synthesize_flat_track
 from app.models import registry
 from app.models.optimization.heuristic_baseline import WeightedOptimizationEngine
 from app.schemas.recommendations import (
@@ -155,6 +156,9 @@ def generate_recommendation(
         cause_class=cause_class,
         candidate_target_cause_classes=cause_classes_map,
         shift_progress=shift_progress,
+        forecast_track=synthesize_flat_track(
+            breach_probability=forecast.breach_probability,
+        ),
     )
 
     surfaced = _filter_for_review(

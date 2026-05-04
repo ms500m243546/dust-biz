@@ -66,6 +66,13 @@ class RankedCandidate(BaseModel):
     # Phase AA — plan-relative production loss label. None when no
     # shift_progress was supplied (degraded / pre-AA call sites).
     plan_relative_loss: PlanRelativeLossLabel | None = None
+    # Phase AC — recommended start time as minutes-from-now. 0 means
+    # act immediately; positive values are operator-actionable waits.
+    # `act_now` collapses sub-threshold waits into the immediate-
+    # execution flow so the UI doesn't surface trivial 1-2 min delays.
+    recommended_trigger_minutes_from_now: int = 0
+    act_now: bool = True
+    trigger_reason: str | None = None
 
 
 class RankedRecommendations(BaseModel):
