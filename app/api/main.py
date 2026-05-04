@@ -68,9 +68,16 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     # Phase P.3 — promote the trained GBM forecast model to `current`
     # if its latest M.4 metric_payload row passes the criteria. Tolerant:
     # leaves the heuristic baseline current if anything goes wrong.
-    from app.domain.dust_forecast_promotion import maybe_promote_gbm
+    from app.domain.dust_forecast_promotion import (
+        maybe_promote_gbm,
+        maybe_promote_gbm_shared,
+    )
 
     maybe_promote_gbm()
+    # Phase X — after the per-station GBM is promoted, see if the
+    # shared multi-station GBM strictly beats it on per-receptor MAE.
+    # If so, flip `current` once more to the shared version.
+    maybe_promote_gbm_shared()
     # Phase R.2 — same pattern for the AP-42 intervention model. Uses
     # the sanity-band fallback when ActionOutcome rows are too thin
     # for empirical calibration (the typical case until partnership

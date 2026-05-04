@@ -1050,6 +1050,100 @@ def decide_promotion(metric_payload: dict[str, Any]) -> PromotionDecision:
 DEFAULT_MAX_ECE_FALLBACK = 0.05
 
 
+# Phase X — tolerance band for per-receptor MAE comparison. Shared
+# wins when its per-receptor MAE is at worst this many µg/m³ above the
+# per-station MAE on every receptor (so noise-only differences don't
+# block promotion), AND strictly better on at least one receptor by a
+# margin > X_PROMOTION_STRICT_MARGIN.
+X_PROMOTION_NONWORSE_TOLERANCE = 0.5
+X_PROMOTION_STRICT_MARGIN = 0.5
+
+
+def decide_shared_promotion(
+    *,
+    shared_payload: dict[str, Any],
+    per_station_payloads: dict[str, dict[str, Any]],
+) -> PromotionDecision:
+    """Phase X — decide whether to flip `current` from per-station to shared.
+
+    Inputs:
+      - `shared_payload`: latest metric_payload row for the shared model.
+        Must carry an `ece`, an `observed_count`, and a `per_receptor`
+        block keyed by `target_id`.
+      - `per_station_payloads`: dict of `station_id -> latest payload` for
+        the per-station model — one entry per station the shared model
+        was evaluated on.
+
+    Criteria (all must hold):
+      1. Shared payload itself passes the standard `decide_promotion`
+         gate (ECE within max_ece, observed_count >= min samples).
+      2. For every station S in shared.per_receptor: shared_mae[S] is
+         non-worse than per_station_mae[S] within
+         `X_PROMOTION_NONWORSE_TOLERANCE` µg/m³.
+      3. Shared is strictly better than per-station on at least one
+         station by > `X_PROMOTION_STRICT_MARGIN` µg/m³.
+      4. Every station in shared.per_receptor has a per-station payload
+         to compare against (otherwise we cannot honestly assert
+         non-worse — hold the promotion until per-station coverage
+         catches up).
+
+    `PromotionDecision.passed=True` means the lifespan hook should
+    flip `current` to the shared version. `False` means leave the
+    per-station version current and surface the reasons.
+    """
+    base = decide_promotion(shared_payload)
+    if not base.passed:
+        return PromotionDecision(
+            passed=False,
+            reasons=tuple(f"shared::{r}" for r in base.reasons),
+        )
+
+    reasons: list[str] = []
+    shared_per_receptor = shared_payload.get("per_receptor") or {}
+    if not isinstance(shared_per_receptor, dict) or not shared_per_receptor:
+        return PromotionDecision(
+            passed=False,
+            reasons=("shared payload has empty per_receptor block",),
+        )
+
+    strict_wins: list[str] = []
+    for station_id, block in shared_per_receptor.items():
+        if not isinstance(block, dict):
+            reasons.append(f"per_receptor[{station_id}] not a dict")
+            continue
+        shared_mae = block.get("mae_pm10")
+        ps_payload = per_station_payloads.get(station_id)
+        if ps_payload is None:
+            reasons.append(
+                f"no per-station payload for {station_id} — "
+                "cannot assert non-worse"
+            )
+            continue
+        ps_mae = ps_payload.get("mae_pm10")
+        if not isinstance(shared_mae, (int, float)):
+            reasons.append(f"shared mae_pm10 missing for {station_id}")
+            continue
+        if not isinstance(ps_mae, (int, float)):
+            reasons.append(f"per-station mae_pm10 missing for {station_id}")
+            continue
+        if shared_mae > ps_mae + X_PROMOTION_NONWORSE_TOLERANCE:
+            reasons.append(
+                f"shared regresses on {station_id}: "
+                f"mae {shared_mae:.2f} > per-station {ps_mae:.2f} "
+                f"+ tol {X_PROMOTION_NONWORSE_TOLERANCE}"
+            )
+        elif shared_mae < ps_mae - X_PROMOTION_STRICT_MARGIN:
+            strict_wins.append(station_id)
+
+    if not strict_wins and not reasons:
+        reasons.append(
+            "shared is non-worse but never strictly better "
+            f"by > {X_PROMOTION_STRICT_MARGIN} — promotion held"
+        )
+
+    return PromotionDecision(passed=not reasons, reasons=tuple(reasons))
+
+
 __all__ = [
     "FEATURE_SET_P1",
     "REQUIRED_COVARIATES_P1",
@@ -1069,8 +1163,11 @@ __all__ = [
     "PromotionDecision",
     "SharedTrainingResult",
     "TrainingResult",
+    "X_PROMOTION_NONWORSE_TOLERANCE",
+    "X_PROMOTION_STRICT_MARGIN",
     "build_p1_protocol",
     "decide_promotion",
+    "decide_shared_promotion",
     "train_one",
     "train_many",
     "train_shared_multi_station",
