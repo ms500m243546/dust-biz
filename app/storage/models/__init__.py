@@ -9,6 +9,7 @@ from app.storage.models.approvals import RecommendationApproval
 from app.storage.models.attributions import SourceAttribution
 from app.storage.models.audit import AuditLog
 from app.storage.models.base import Base
+from app.storage.models.dispersion import DispersionMatrix
 from app.storage.models.dust_events import DustEvent
 from app.storage.models.features import FeatureRecord
 from app.storage.models.forecasts import DustPrediction
@@ -31,6 +32,7 @@ __all__ = [
     "ActionOutcome",
     "AuditLog",
     "Base",
+    "DispersionMatrix",
     "DustEvent",
     "DustPrediction",
     "Equipment",

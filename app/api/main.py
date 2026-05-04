@@ -96,6 +96,16 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     from app.domain.cost_promotion import maybe_promote_cycle_time_cost
 
     maybe_promote_cycle_time_cost()
+    # Phase BA.10 — register the distance-decay dispersion baseline
+    # always, then promote the CFD lookup over it when a calibrated
+    # DispersionMatrix exists for the pilot mine.
+    from app.domain.dispersion_promotion import (
+        ensure_dispersion_baseline_registered,
+        maybe_promote_cfd_lookup,
+    )
+
+    ensure_dispersion_baseline_registered()
+    maybe_promote_cfd_lookup()
     scheduler = None
     if settings.scheduler_enabled:
         from app.domain.scheduler import get_default_scheduler
