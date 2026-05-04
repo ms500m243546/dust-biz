@@ -474,9 +474,18 @@ def _fit_models(
     )
     regressor.fit(X, y_pm10)
 
+    # Phase Y — class imbalance mitigation. Breach events are rare
+    # (B-8 territory: most stations have <5% positive class in any
+    # given test window). `class_weight="balanced"` reweights the
+    # gradient so the minority-class loss isn't drowned out by the
+    # majority-class loss, lifting breach_recall from 0.0 on the
+    # tightest receptors. ECE remains gated by M.4.1; if the
+    # rebalanced classifier blows past max_ece, the SG-1 fallback
+    # still triggers isotonic recalibration.
     base_clf = HistGradientBoostingClassifier(
         max_iter=200,
         random_state=random_state,
+        class_weight="balanced",
     )
     if recalibrate:
         # Wrap the classifier in CalibratedClassifierCV with isotonic
