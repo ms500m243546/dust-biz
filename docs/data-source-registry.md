@@ -43,7 +43,7 @@ Coquimbo Region). Insider partner-data path expected via the
 |---|---|---|---|---|---|
 | **ERA5 reanalysis** (Copernicus CDS) | ECMWF / Copernicus | Free with registration; commercial use OK | Global; hourly back to 1940; **load-bearing for high-altitude mines (Los Bronces 3,500 m)** because surface stations don't represent the operating regime | Hourly (3-month latency for definitive data) | `app/ingestion/public/era5.py` parser (L.3) + `scripts/seed_public_data.py --source era5` payload-mode (L.M.1); full CDS-API live mode deferred to L.M.2 |
 | **DGA** (Dirección General de Aguas) | DGA Chile | Public | Hydromet stations nationwide; better in valleys than at altitude | Hourly + daily | `app/ingestion/public/dga.py` (L.3) |
-| **DMC** (Dirección Meteorológica de Chile) | DMC | Public | Official met service; surface stations | Hourly | (Optional; DGA covers most of what we need) |
+| **DMC** (Dirección Meteorológica de Chile) | DMC | Public | Official met service; surface stations | Hourly | `app/ingestion/public/dmc.py` (BA.1 — payload-mode parser; live mode deferred) |
 | **Open-Meteo archive** | Open-Meteo (OSS) | **CC-BY-NC** — non-commercial only | Global free fallback | Hourly | `app/ingestion/public/open_meteo.py` + `scripts/seed_public_data.py --source open_meteo` (L.M.1, live-wired). YAML batch via `weather_targets:`. Dev-only per CC-BY-NC; production must swap to ERA5. |
 
 **Open-Meteo license note:** explicitly non-commercial. Acceptable
