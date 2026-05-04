@@ -37,10 +37,18 @@ class InterventionOptionSchema(BaseModel):
     # names a zone whose `zone_type` is in this list, the optimizer
     # boosts this candidate. Empty list = no preference.
     target_cause_classes: list[ZoneType] = Field(default_factory=list)
+    # Phase AD — shared resource pools this intervention consumes.
+    # The joint optimizer treats overlap as a conflict.
+    resource_classes: list[str] = Field(default_factory=list)
 
     @field_validator("target_cause_classes", mode="before")
     @classmethod
     def _coerce_none_target_cause_classes(cls, v: Any) -> Any:
         # Legacy rows persisted before Phase Z surface NULL in the JSON
         # column; treat that as the empty / no-preference case.
+        return [] if v is None else v
+
+    @field_validator("resource_classes", mode="before")
+    @classmethod
+    def _coerce_none_resource_classes(cls, v: Any) -> Any:
         return [] if v is None else v

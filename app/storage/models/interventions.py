@@ -37,3 +37,12 @@ class InterventionOption(Base):
     target_cause_classes: Mapped[list[str]] = mapped_column(
         JSON, default=list, nullable=True
     )
+    # Phase AD — shared resources this intervention consumes. Two
+    # interventions across different zones that share a resource class
+    # cannot fire concurrently (e.g. one water truck cannot service
+    # two haul roads at once). The joint optimizer uses these to
+    # break ties when multiple zones are at risk simultaneously.
+    # Empty / NULL = no shared-resource constraint.
+    resource_classes: Mapped[list[str]] = mapped_column(
+        JSON, default=list, nullable=True
+    )
