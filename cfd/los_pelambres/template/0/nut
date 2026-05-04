@@ -1,0 +1,44 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| Phase BA.3 - turbulent kinematic viscosity (computed; only walls set).     |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       volScalarField;
+    object      nut;
+}
+
+dimensions      [0 2 -1 0 0 0 0];
+
+internalField   uniform 0;
+
+boundaryField
+{
+    inlet
+    {
+        type            calculated;
+        value           uniform 0;
+    }
+    outlet
+    {
+        type            calculated;
+        value           uniform 0;
+    }
+    sides
+    {
+        type            calculated;
+        value           uniform 0;
+    }
+    top
+    {
+        type            calculated;
+        value           uniform 0;
+    }
+    terrain
+    {
+        type            nutkAtmRoughWallFunction;
+        z0              uniform 0.05;   // mining/exposed-rock roughness length, m
+        value           uniform 0;
+    }
+}

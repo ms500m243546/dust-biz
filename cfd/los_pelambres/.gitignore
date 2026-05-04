@@ -1,0 +1,18 @@
+# Phase BA.3 - keep template + small operator artifacts in tree;
+# all heavy run / mesh / DEM data stays out.
+
+# Run directories balloon to GBs (mesh + every written time step).
+runs/
+
+# DEM tiles are operator-downloaded and large.
+dem/*.hgt
+dem/*.tif
+dem/*.zip
+
+# Built STL surfaces; reproducible from dem/ via scripts/cfd/dem_to_stl.py.
+template/constant/triSurface/*.stl
+
+# Reconstructed lookup matrices land here as JSON; small enough to
+# version-control once they're calibrated, but the in-flight ones
+# during a campaign are noisy artifacts.
+reduced/*.json

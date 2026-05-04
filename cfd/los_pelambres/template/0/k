@@ -1,0 +1,47 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| Phase BA.3 - turbulent kinetic energy.                                     |
+|                                                                            |
+| __INLET_K__ derived from inlet speed via Richards-Hoxey ABL:               |
+|   k = u_star^2 / sqrt(C_mu)                                                |
+| where u_star = U_inlet * kappa / ln((z_ref + z_0) / z_0).                  |
+| The orchestrator computes this and patches in.                             |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       volScalarField;
+    object      k;
+}
+
+dimensions      [0 2 -2 0 0 0 0];
+
+internalField   uniform __INLET_K__;
+
+boundaryField
+{
+    inlet
+    {
+        type            fixedValue;
+        value           uniform __INLET_K__;
+    }
+    outlet
+    {
+        type            inletOutlet;
+        inletValue      uniform __INLET_K__;
+        value           uniform __INLET_K__;
+    }
+    sides
+    {
+        type            slip;
+    }
+    top
+    {
+        type            slip;
+    }
+    terrain
+    {
+        type            kqRWallFunction;
+        value           uniform __INLET_K__;
+    }
+}

@@ -1,0 +1,26 @@
+#!/bin/bash
+# Phase BA.3 - run one regime (BCs already patched by the orchestrator).
+# Produces postProcessing/cloudInfo/<time>/<receptor>.dat and
+# the final time-step field directory used for source-receptor extraction.
+
+set -euo pipefail
+
+cd "$(dirname "$0")"
+
+if [[ ! -d constant/polyMesh ]]; then
+    echo "ERROR: constant/polyMesh missing. Run Allmesh first." >&2
+    exit 1
+fi
+
+NCORES=${NCORES:-12}
+
+echo "[Allrun] decomposePar -force"
+decomposePar -force > log.decomposePar 2>&1
+
+echo "[Allrun] simpleFoam (parallel, ${NCORES} cores)"
+mpirun -np "${NCORES}" simpleFoam -parallel > log.simpleFoam 2>&1
+
+echo "[Allrun] reconstructPar -latestTime"
+reconstructPar -latestTime > log.reconstructPar 2>&1
+
+echo "[Allrun] done; postProcessing/ ready for extraction"

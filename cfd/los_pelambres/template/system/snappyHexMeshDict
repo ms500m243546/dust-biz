@@ -1,0 +1,121 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| Phase BA.3 - terrain refinement on the SRTM-derived STL.                   |
+|                                                                            |
+| The orchestrator drops `terrain.stl` into constant/triSurface/ before      |
+| running snappyHexMesh. Refinement levels:                                  |
+|   - level 2 within the full domain (matches STL bounds)                    |
+|   - level 4 within 200 m of the terrain surface                            |
+| Mesh once per case; reused across regimes (BCs change, mesh doesn't).      |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      snappyHexMeshDict;
+}
+
+castellatedMesh true;
+snap            true;
+addLayers       false;
+
+geometry
+{
+    terrain.stl
+    {
+        type triSurfaceMesh;
+        name terrain;
+    }
+}
+
+castellatedMeshControls
+{
+    maxLocalCells       1000000;
+    maxGlobalCells      8000000;
+    minRefinementCells  10;
+    nCellsBetweenLevels 3;
+    resolveFeatureAngle 30;
+
+    features ();
+
+    refinementSurfaces
+    {
+        terrain
+        {
+            level (2 4);
+            patchInfo
+            {
+                type wall;
+            }
+        }
+    }
+
+    refinementRegions
+    {
+        terrain
+        {
+            mode    distance;
+            levels  ((100 4) (300 3) (1000 2));
+        }
+    }
+
+    locationInMesh (0 0 1500);   // centre of the 3 km AGL column
+    allowFreeStandingZoneFaces true;
+}
+
+snapControls
+{
+    nSmoothPatch        3;
+    tolerance           2.0;
+    nSolveIter          50;
+    nRelaxIter          5;
+    nFeatureSnapIter    10;
+    implicitFeatureSnap true;
+}
+
+addLayersControls
+{
+    relativeSizes       true;
+    layers
+    {
+        terrain
+        {
+            nSurfaceLayers 0;   // wall functions used; no prism layers
+        }
+    }
+    expansionRatio      1.2;
+    finalLayerThickness 0.5;
+    minThickness        0.1;
+    nGrow               0;
+    featureAngle        60;
+    slipFeatureAngle    30;
+    nRelaxIter          5;
+    nSmoothSurfaceNormals 1;
+    nSmoothNormals      3;
+    nSmoothThickness    10;
+    maxFaceThicknessRatio 0.5;
+    maxThicknessToMedialRatio 0.3;
+    minMedialAxisAngle  90;
+    nBufferCellsNoExtrude 0;
+    nLayerIter          50;
+}
+
+meshQualityControls
+{
+    maxNonOrtho         70;
+    maxBoundarySkewness 20;
+    maxInternalSkewness 4;
+    maxConcave          80;
+    minVol              1e-13;
+    minTetQuality       1e-15;
+    minArea             -1;
+    minTwist            0.02;
+    minDeterminant      0.001;
+    minFaceWeight       0.05;
+    minVolRatio         0.01;
+    minTriangleTwist    -1;
+    nSmoothScale        4;
+    errorReduction      0.75;
+}
+
+mergeTolerance 1e-6;

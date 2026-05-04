@@ -1,0 +1,18 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| Phase BA.3 - air kinematic transport.                                      |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      transportProperties;
+}
+
+transportModel  Newtonian;
+
+// Standard atmosphere ~15 C, 1 atm; Los Pelambres pit floor ~3,200 m
+// elevation -- density correction folded into the cloudProperties
+// rho rather than re-deriving here. nu uses sea-level value as the
+// reference; revisit if calibration shows altitude-correction matters.
+nu              [0 2 -1 0 0 0 0] 1.5e-5;

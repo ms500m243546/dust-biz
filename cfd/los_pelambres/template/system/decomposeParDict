@@ -1,0 +1,18 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| Phase BA.3 - parallel decomposition for 12-core target (Ryzen 9 5900X).    |
+|                                                                            |
+| 12 subdomains via scotch (graph-partitioning, balances cell counts).       |
+| If running on a different core count, edit numberOfSubdomains and rerun    |
+| `decomposePar -force`.                                                     |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      decomposeParDict;
+}
+
+numberOfSubdomains 12;
+
+method          scotch;

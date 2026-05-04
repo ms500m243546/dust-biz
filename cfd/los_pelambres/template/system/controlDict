@@ -1,0 +1,57 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| Phase BA.3 - simpleFoam steady-state run + kinematicCloud particle pass.   |
+|                                                                            |
+| Two-stage protocol per regime:                                             |
+|   1. simpleFoam to convergence on the RANS field (steady).                 |
+|   2. kinematicCloud particle pass on the converged field, also driven      |
+|      by simpleFoam with subModels active.                                  |
+| The orchestrator runs both via Allrun.                                     |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      controlDict;
+}
+
+application     simpleFoam;
+
+startFrom       startTime;
+startTime       0;
+
+stopAt          endTime;
+endTime         2000;          // pseudo-time iterations for steady RANS
+
+deltaT          1;
+
+writeControl    timeStep;
+writeInterval   500;
+
+purgeWrite      0;
+writeFormat     binary;
+writePrecision  6;
+writeCompression off;
+timeFormat      general;
+timePrecision   6;
+
+runTimeModifiable true;
+
+functions
+{
+    cloudInfo
+    {
+        type            cloudInfo;
+        libs            ("liblagrangianFunctionObjects.so");
+        clouds          (kinematicCloud);
+        writeControl    writeTime;
+    }
+    residuals
+    {
+        type            residuals;
+        libs            ("libutilityFunctionObjects.so");
+        writeControl    timeStep;
+        writeInterval   1;
+        fields          (U p k epsilon);
+    }
+}

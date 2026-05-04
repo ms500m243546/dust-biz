@@ -1,0 +1,55 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| Phase BA.3 - simpleFoam linear solvers + SIMPLE controls.                  |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      fvSolution;
+}
+
+solvers
+{
+    p
+    {
+        solver           GAMG;
+        smoother         GaussSeidel;
+        tolerance        1e-7;
+        relTol           0.05;
+    }
+
+    "(U|k|epsilon)"
+    {
+        solver          smoothSolver;
+        smoother        GaussSeidel;
+        nSweeps         2;
+        tolerance       1e-7;
+        relTol          0.1;
+    }
+}
+
+SIMPLE
+{
+    nNonOrthogonalCorrectors 1;
+    consistent               true;
+    residualControl
+    {
+        p   1e-3;
+        U   1e-4;
+        "(k|epsilon)" 1e-3;
+    }
+}
+
+relaxationFactors
+{
+    fields
+    {
+        p           0.3;
+    }
+    equations
+    {
+        U           0.7;
+        "(k|epsilon)" 0.7;
+    }
+}

@@ -1,0 +1,88 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| Phase BA.3 - kinematicCloud configuration for PM10 + PM2.5 parcels.        |
+|                                                                            |
+| One Lagrangian cloud carrying two parcel size classes. The orchestrator    |
+| seeds particle releases per dust-generating zone in the mine. Receptors    |
+| are sampled via cloudFunctionObject patches (configured in controlDict).   |
+|                                                                            |
+| __PARTICLE_INJECTION_SITES__ is a placeholder list filled by the           |
+| orchestrator from data_seed/los_pelambres.yaml zones.                      |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      cloudProperties;
+}
+
+solution
+{
+    active          true;
+    coupled         false;        // one-way coupling: dust doesn't affect air
+    transient       no;           // RANS background -> steady particle stats
+    cellValueSourceCorrection no;
+    maxCo           0.3;
+    interpolationSchemes
+    {
+        rho             cell;
+        U               cellPoint;
+        mu              cell;
+    }
+    integrationSchemes
+    {
+        U               Euler;
+    }
+    sourceTerms
+    {
+        schemes
+        {
+            U           semiImplicit 1;
+        }
+    }
+}
+
+constantProperties
+{
+    parcelTypeId    1;
+    rho0            2650;        // mineral-dust density, kg/m^3
+    youngsModulus   6e8;
+    poissonsRatio   0.35;
+}
+
+subModels
+{
+    particleForces
+    {
+        sphereDrag;
+        gravity;
+    }
+
+    injectionModels
+    {
+        // Per-zone injection sites are populated by the orchestrator
+        // before each run; the placeholder block below is overwritten.
+        __PARTICLE_INJECTION_SITES__
+    }
+
+    dispersionModel stochasticDispersionRAS;
+
+    patchInteractionModel standardWallInteraction;
+    standardWallInteractionCoeffs
+    {
+        type            stick;   // particles deposit on terrain on impact
+    }
+
+    surfaceFilmModel none;
+
+    stochasticCollisionModel none;
+}
+
+cloudFunctions
+{
+    // Receptor concentration sampling boxes; populated by the
+    // orchestrator from data_seed receptors. Each entry writes a
+    // time-averaged concentration scalar field that the
+    // postProcessing step extracts to results.json.
+    __RECEPTOR_SAMPLERS__
+}

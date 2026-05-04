@@ -1,0 +1,46 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| Phase BA.3 - TKE dissipation rate.                                         |
+|                                                                            |
+| __INLET_EPS__ from Richards-Hoxey ABL:                                     |
+|   epsilon = u_star^3 / (kappa * (z + z_0))                                 |
+| evaluated at z = reference height (typically pit-floor + 10 m).            |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       volScalarField;
+    object      epsilon;
+}
+
+dimensions      [0 2 -3 0 0 0 0];
+
+internalField   uniform __INLET_EPS__;
+
+boundaryField
+{
+    inlet
+    {
+        type            fixedValue;
+        value           uniform __INLET_EPS__;
+    }
+    outlet
+    {
+        type            inletOutlet;
+        inletValue      uniform __INLET_EPS__;
+        value           uniform __INLET_EPS__;
+    }
+    sides
+    {
+        type            slip;
+    }
+    top
+    {
+        type            slip;
+    }
+    terrain
+    {
+        type            epsilonWallFunction;
+        value           uniform __INLET_EPS__;
+    }
+}

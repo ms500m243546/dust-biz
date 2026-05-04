@@ -1,0 +1,27 @@
+#!/bin/bash
+# Phase BA.3 - generate the mesh once per case directory.
+# Run BEFORE Allrun. Produces constant/polyMesh/.
+
+set -euo pipefail
+
+cd "$(dirname "$0")"
+
+if [[ ! -f constant/triSurface/terrain.stl ]]; then
+    echo "ERROR: constant/triSurface/terrain.stl missing." >&2
+    echo "Run scripts/cfd/dem_to_stl.py first." >&2
+    exit 1
+fi
+
+echo "[Allmesh] blockMesh"
+blockMesh > log.blockMesh 2>&1
+
+echo "[Allmesh] surfaceFeatureExtract"
+surfaceFeatureExtract > log.surfaceFeatureExtract 2>&1 || true
+
+echo "[Allmesh] snappyHexMesh -overwrite"
+snappyHexMesh -overwrite > log.snappyHexMesh 2>&1
+
+echo "[Allmesh] checkMesh"
+checkMesh > log.checkMesh 2>&1 || echo "checkMesh reported issues; review log.checkMesh"
+
+echo "[Allmesh] done"

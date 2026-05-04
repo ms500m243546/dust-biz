@@ -1,0 +1,46 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| Phase BA.3 - velocity initial / boundary conditions for simpleFoam.        |
+|                                                                            |
+| The orchestrator (scripts/cfd/run_campaign.py) replaces the placeholders   |
+| __INLET_UX__, __INLET_UY__, __INLET_UZ__ with regime-specific values       |
+| before launching each run. Default values are deliberate zeros so a        |
+| direct `simpleFoam` invocation without the orchestrator fails fast.        |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       volVectorField;
+    object      U;
+}
+
+dimensions      [0 1 -1 0 0 0 0];
+
+internalField   uniform (__INLET_UX__ __INLET_UY__ __INLET_UZ__);
+
+boundaryField
+{
+    inlet
+    {
+        type            fixedValue;
+        value           uniform (__INLET_UX__ __INLET_UY__ __INLET_UZ__);
+    }
+    outlet
+    {
+        type            inletOutlet;
+        inletValue      uniform (0 0 0);
+        value           uniform (__INLET_UX__ __INLET_UY__ __INLET_UZ__);
+    }
+    sides
+    {
+        type            slip;
+    }
+    top
+    {
+        type            slip;
+    }
+    terrain
+    {
+        type            noSlip;
+    }
+}

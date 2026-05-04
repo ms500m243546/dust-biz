@@ -1,125 +1,185 @@
-# Phase BA — Terrain-aware dispersion via offline CFD (Los Pelambres pilot)
+# Phase BA — Terrain-aware dispersion via offline OpenFOAM (Los Pelambres pilot)
 
-Replaces the deferred AERMOD/CALPUFF placeholder with offline SimScale
-CFD + particle tracking, reduced to source-receptor matrices and
-served via realtime lookup. First implementation: Los Pelambres only.
+Replaces the deferred AERMOD/CALPUFF placeholder with offline OpenFOAM
+RANS + Lagrangian particle tracking, reduced to source-receptor
+matrices and served via realtime lookup. First implementation:
+Los Pelambres only.
+
+## Solver choice — OpenFOAM (decided 2026-05-04)
+
+After SimScale free quota of 10 sims proved binding for a 16×3
+regime grid, the campaign moved to OpenFOAM v2312 on a workstation.
+SimScale Pro ($2.4-4k/yr) ruled out as not justified at pilot stage.
+
+**Compute target**: AMD Ryzen 9 5900X, 12 cores / 24 threads, 32 GB
+RAM, 165 GB free on C: + 477 GB on D:. WSL2 + Ubuntu 22.04 is the
+target Linux runtime; OpenFOAM v2312 from `apt`. Per-run estimate
+1-1.5 h at ~5M cells, 12-core parallel; 48-run campaign = 60-72 h
+serial. Run dirs live on D: drive, mounted into WSL at `/mnt/d/`.
 
 ## 10-sub-phase outline
 
 | # | Goal | Output |
 |---|---|---|
-| **BA.1** | Public sensor census + connectors (SINCA + DGA + DMC) | DMC connector skeleton (this commit). Operator-manual census of Choapa-basin DGA/DMC stations follows. |
-| **BA.2** | DEM acquisition (SRTM 30m / ALOS World 3D) cropped to pit + receptors + 10 km buffer | `data_seed/los_pelambres_dem.tif` + extent metadata |
-| **BA.3** | SimScale campaign config — 10-sim regime grid + particle-tracking setup | YAML manifest, 10 sims |
-| **BA.4** | Run the campaign + export particle-tracking results via SimScale API | Per-regime dispersion fields |
-| **BA.5** | Reduce to source-receptor matrices `M[wind_dir][wind_speed_bin][stability][source_zone][receptor]` | New `DispersionMatrix` schema + per-mine artifact |
-| **BA.6** | New `app/models/dispersion/cfd_lookup_v0.1.0` model layer | Realtime path: snap wind → matrix lookup → per-receptor concentration share |
-| **BA.7** | 6-month bootstrap calibration vs observed PM10 + sanity-band promotion probe | Same shape as AP-42 / cycle-time deferred-mode promotion |
-| **BA.8** | Sharpen Phase Z attribution with per-source contribution shares (replaces zone-type heuristic) | `cause_class` resolves to the specific source zone whose contribution dominates the affected receptor under current wind |
-| **BA.9** | Wire dispersion into the intervention-impact path (replaces AP-42 distance-decay placeholder for terrain-affected paths) | Bigger deltas where pit recirculation / valley channeling matters |
-| **BA.10** | Lifespan-hook auto-promotion for the dispersion model | Deferred mode falls back to AP-42 when calibration fails |
+| **BA.1** | DMC connector + plan doc | done — `app/ingestion/public/dmc.py`, this doc |
+| **BA.2** | SRTM `.hgt` → STL terrain pipeline (pure-Python; no GDAL dep) | `scripts/cfd/dem_to_stl.py` + tests |
+| **BA.3** | OpenFOAM case template — `simpleFoam` (RANS, k-ε) + `kinematicCloud` (PM10 + PM2.5 parcel classes) | `cfd/los_pelambres/template/{0,constant,system}/` + Allmesh / Allrun |
+| **BA.4** | Campaign orchestrator | `scripts/cfd/run_campaign.py` — loops 48 regimes, copies template, patches BCs, drives WSL via subprocess, extracts per-receptor concentrations, `--dry-run` for CI |
+| **BA.5** | Reduce runs to source-receptor matrices | `app/domain/dispersion_matrix.py`, `app/schemas/dispersion.py`, `dispersion_matrices` table + migration |
+| **BA.6** | `cfd_lookup_v0.1.0` model layer | `app/models/dispersion/{__init__,distance_decay_baseline,cfd_lookup_v0_1_0}.py` |
+| **BA.7** | 6-month bootstrap calibration vs observed PM10 | deferred (post-campaign) |
+| **BA.8** | Sharpen Phase Z attribution with per-source contribution shares | deferred (post-campaign) |
+| **BA.9** | Wire dispersion into the intervention-impact path | deferred (post-campaign) |
+| **BA.10** | Lifespan auto-promotion for the dispersion model | `app/domain/dispersion_promotion.py` + `app/api/main.py` hook |
 
-## 10-sim regime grid (BA.3)
+## 48-run regime grid (BA.3 / BA.4)
 
-Free-tier quota: 10 unrestricted simulations, 3000 core-hours.
+* **16 wind directions** at compass-octant + half-octant resolution
+  (N, NNE, NE, ENE, E, …) — full 22.5° coverage. Direction sweep is
+  the dominant terrain-effect driver at Los Pelambres (Choapa valley
+  channels NW-SE).
+* **3 wind speed bins** at 25th / 50th / 75th percentiles drawn from
+  the existing 12-month ERA5 climatology over the Los Pelambres pit
+  centroid.
+* **1 stability class** (neutral, Pasquill class D) for the campaign;
+  stable / unstable handled via analytic Pasquill–Gifford rescaling
+  on top of the neutral CFD field at inference time.
 
-* **8 wind directions** at the prevailing speed for each direction at
-  Los Pelambres (drawn from ERA5 climatology over the existing 12-month
-  weather corpus). Octants: N / NE / E / SE / S / SW / W / NW.
-* **+ 1 high-wind extreme**: 95th-percentile speed, prevailing direction.
-* **+ 1 low-wind / stable**: 5th-percentile speed, prevailing direction,
-  stable boundary layer.
+Total: **48 regime runs** ≈ 60-72 h serial on the Ryzen 5900X.
 
-Total: **10 sims** ✓.
+If BA.7 calibration shows stability-class rescaling is the dominant
+error, a follow-on campaign adds Pasquill A/B + E/F at the prevailing
+direction × speed cells (~16 extra runs).
 
-### Pasquill–Gifford rescaling (the load-bearing approximation)
+## Solver setup (BA.3)
 
-Conditions that aren't simulated get analytic rescaling applied
-on top of the CFD field at inference time:
+* **simpleFoam** (RANS, steady-state, k-ε turbulence model) for the
+  background flow field. Captures pit recirculation and valley
+  channeling via `snappyHexMesh`-refined terrain. Mean field is what
+  the lookup needs — LES eddy resolution is overkill.
+* **kinematicCloud** Lagrangian particle tracker overlaid on the
+  converged RANS field. Two parcel classes:
+    * **PM10** — D=5 µm, density=2650 kg/m³ (mineral dust), settling
+      velocity dominant; sticks to terrain on impact.
+    * **PM2.5** — D=1 µm, density=2650 kg/m³, near-tracer behaviour;
+      tracks the air mass.
+* **Source seeding**: one particle release per dust-generating
+  `Zone` in `data_seed/los_pelambres.yaml` (haul road segments,
+  pit benches, dump areas, crusher feed, stockpiles). Release rate
+  is irrelevant for the matrix — we normalise per unit emission
+  before storing — but should be high enough that statistical
+  noise is negligible (~1e6 parcels per regime).
+* **Receptors**: bounded sampling boxes co-located with each
+  populated place (Cuncumén, Caimanes, Salamanca, …) and each
+  compliance station. `kinematicCloud` records concentration at
+  these via `cloudFunctionObject`s.
 
-* **Stability classes** (A–F) not simulated: scale plume-spread
-  parameters σy / σz analytically per Pasquill–Gifford curves on
-  top of the CFD-derived mean field.
-* **Wind speeds** between simulated grid points: linear interpolation
-  by speed magnitude.
-* **Wind directions** off-grid: snap to nearest octant; document the
-  snap-error per receptor in the calibration step (BA.7) so reviewers
-  see the residual the lookup *can't* resolve.
+## Mesh setup
 
-If BA.7 calibration shows direction snapping is the dominant error,
-the next free quota goes to filling the cardinal-direction gaps
-(promote to 16-direction grid).
+* **Background mesh** (`blockMesh`): 10 km × 10 km × 3 km bounding
+  box, ~50 m hex cells (~120 × 120 × 60 ≈ 0.9M base cells).
+* **Terrain refinement** (`snappyHexMesh`): SRTM 30m STL surface,
+  refine levels 2-4 within 200 m of terrain → ~5M total cells.
+* **Domain orientation**: keep the mesh axis-aligned; rotate the
+  inlet velocity vector per regime instead of rotating the mesh.
+  Avoids re-meshing 48 times (mesh once, change BCs only).
 
-### Particle-tracking setup
+## DEM pipeline (BA.2)
 
-* Lagrangian particle tracker (not passive scalar) — needed for
-  size-resolved settling so PM10 and PM2.5 differ in their fates.
-  Two particle classes: PM10 (D ≈ 5 µm, denser settling) and PM2.5
-  (D ≈ 1 µm, near-tracer behaviour).
-* Source seeding: one tracer release per `Zone` of dust-generating
-  type within the bounding domain.
-* Receptor sampling: bounded boxes co-located with each populated-
-  place + each compliance station listed in
-  `data_seed/los_pelambres.yaml`.
+* **Source**: NASA SRTM 30 m (1 arc-second) `.hgt` files, public
+  domain, downloadable from USGS Earth Explorer or
+  `dwtkns.com/srtm30m` (no auth for the latter as a fallback).
+* **Required tiles** for Los Pelambres bounding box (-71.50 to
+  -70.00 lon, -32.50 to -31.00 lat): `S32W071.hgt`, `S32W072.hgt`,
+  `S33W071.hgt`, `S33W072.hgt`. Operator downloads manually.
+* **Pipeline**: pure-Python `.hgt` parser (NASA SRTM3 = 1201×1201
+  big-endian int16 voids = -32768) → numpy elevation grid → STL
+  triangulation cropped to the mine bounding box → `cfd/los_pelambres/template/constant/triSurface/terrain.stl`.
+* **No GDAL / rasterio dep** — keeps the CI footprint clean. The
+  pure-Python path is ~50 lines and matches the deferred-mode
+  pattern used elsewhere in the codebase.
 
-## Sensor census (BA.1) — operator-manual steps
+## Campaign orchestrator (BA.4)
 
-The DMC connector ships in this commit (skeleton matching the ERA5 /
-DGA pattern, payload-mode parser only, live mode deferred). The
-actual census is network-gated and runs out-of-band:
+* **Regime grid generator** — produces 48 `Regime(direction_deg,
+  speed_ms, stability)` rows from the climatology JSON.
+* **Per-regime steps**:
+  1. `mkdir cfd/los_pelambres/runs/<regime_id>/`
+  2. Copy template files into the run dir.
+  3. Patch `0/U` inlet BC with `(speed * cos(dir), speed * sin(dir), 0)`.
+  4. Patch `0/k`, `0/epsilon` from speed-derived ABL turbulence
+     (Richards-Hoxey log law inputs).
+  5. Run `wsl.exe bash -c "cd /mnt/d/.../runs/<regime_id> && ./Allmesh && ./Allrun"`.
+  6. Capture exit code + log.
+  7. Run `postProcessing` extraction: read per-receptor concentration
+     time series, write `results.json` with `{receptor_id:
+     {source_zone_id: concentration_normalised}}`.
+* **Modes**:
+  * `--dry-run` — stage directories + patched files, do NOT invoke
+    OpenFOAM. Exercised by CI smoke test.
+  * `--execute` — full run. Operator-driven, not in CI.
+  * `--regime-grid {16x3,8x3,8x2}` — explicit grid override.
+* **Result location**: `cfd/los_pelambres/runs/` is `.gitignore`d
+  (mesh + field files balloon to GBs). Only `results.json` per
+  regime is artifact-grade and gets retained out-of-tree.
 
-1. **SINCA**: confirm nothing beyond the 11 stations already in
-   `data_seed/los_pelambres.yaml`. Status: 1 with data
-   (`lp-em05-cuncumen`), 8 registered but empty SINCA archives
-   (likely SMA-filed only), 2 operator-private.
-2. **DGA hydromet**: enumerate Choapa-basin stations (Cuncumén,
-   Salamanca, Illapel, Limáhuida, El Tambo, etc.) and add as
-   `weather_targets:` entries.
-3. **DMC**: enumerate IV Region (Coquimbo) surface stations and add
-   as `weather_targets:`.
-4. **CR2 Explorador Climático**: optional. Gridded reanalysis-grade
-   products useful for filling wind regime climatology (input to
-   BA.3 prevailing-direction picks); redundant with ERA5 for
-   realtime weather ingest.
-5. **Beyond the 100 km radius**: skip. Adjacent provinces (Aconcagua,
-   Petorca, Limarí) don't help for Los Pelambres terrain-aware
-   dispersion.
+## Matrix reduction (BA.5)
 
-Once the census is run, the operator updates
-`data_seed/los_pelambres.yaml` with the new `weather_targets:` and
-re-runs `python scripts/seed_public_data.py --source dmc --from-yaml`.
+* **Input**: 48 `results.json` files, one per regime.
+* **Output**: `DispersionMatrix` schema —
+    `coefficients: dict[(dir_bin, speed_bin, stability), dict[(source_zone, receptor), float]]`
+  — fraction of source emission reaching the receptor under that
+  regime, normalised by source rate.
+* **Persistence**: new `dispersion_matrices` table. One row per mine,
+  versioned (`mine_id`, `model_version`, `created_at`,
+  `coefficients` JSON, `regime_grid` JSON, `source_run_dir`).
+* **Migration**: `scripts/migrate_dispersion_matrices.py` (idempotent
+  ALTER TABLE pattern matching prior migrations).
 
-## Calibration (BA.7) — 6-month bootstrap
+## Lookup model (BA.6)
 
+* `app/models/dispersion/cfd_lookup_v0_1_0.py` — `CFDLookupDispersionModel`.
+  * `predict(source_emissions, current_wind, stability, receptor) -> concentration`
+  * Snap-to-grid: nearest direction bin, linear interpolation between
+    speed bins, Pasquill–Gifford analytic rescaling for stability
+    classes off the trained grid.
+* **Heuristic baseline** `app/models/dispersion/distance_decay_baseline.py`:
+  current AP-42-shape distance × wind-alignment placeholder. Always
+  registered; falls back when `cfd_lookup` isn't promoted (matches
+  AP-42 / cycle-time pattern).
+* **Registry**: new `model_kind = "dispersion"`. Lifespan promotes
+  `cfd_lookup` over baseline iff a calibrated `DispersionMatrix`
+  exists for the current mine.
+
+## Calibration (BA.7) — deferred to post-campaign
+
+Same shape as AP-42 / cycle-time:
 * **Train window**: months 1-6 of the existing 14-year SINCA
-  Cuncumén corpus (sealed; M.4 protocol shape).
+  Cuncumén corpus.
 * **Validation window**: months 7-12 sealed.
-* **Metric**: per-receptor MAE on observed PM10 vs predicted PM10
-  (CFD lookup × AP-42 source emission). Sanity-band probe identical
-  to AP-42 / cycle-time pattern: predicted concentration must fall
-  within ±2σ of an analytic baseline across the test windows.
-* **Promotion**: auto-promote `cfd_lookup_v0.1.0` to `current`
-  dispersion model when the probe passes; fallback to AP-42
-  distance-decay otherwise.
-* **Honest deferral**: if Cuncumén alone provides too little spatial
-  diversity for calibration (likely), surface as a partnership-
-  gated blocker on the SINCA-empty receptors — the multi-receptor
-  fit is what makes the dispersion matrix's per-receptor
-  predictions verifiable.
+* **Sanity-band probe**: predicted PM10 (CFD lookup × AP-42 source
+  emission) within ±2σ of observed across the test windows.
+* **Auto-promotion**: lifespan hook flips `current` from baseline
+  to `cfd_lookup` when probe passes.
 
-## SimScale paid alternatives (reference)
+If Cuncumén alone provides too little spatial diversity (likely),
+surface as partnership-gated blocker on the SINCA-empty receptors
+— multi-receptor fit is what makes the matrix verifiable.
 
-If the free 10-sim quota proves binding, paid tiers (training-time
-estimates; verify on simscale.com):
+## Tuesday checklist (operator-side)
 
-* **Professional**: ~$2.4-4k/yr, more core-hours, parallel runs
-* **Enterprise**: $10-50k+/yr, unlimited core-hours, on-prem option
-
-OpenFOAM is the open-source alternative — same physics free, but
-self-hosted compute. Tradeoff is engineering time vs subscription.
-
-## Deliverable order
-
-Strict dependency: BA.1 (manual census) → BA.2 → BA.3 → BA.4 → BA.5+.
-BA.5–BA.10 can interleave once the matrices exist; BA.8 / BA.9 only
-need a working `cfd_lookup` model, not full multi-receptor calibration.
+1. `wsl --install` (reboots) → installs Ubuntu 22.04.
+2. Inside WSL: install OpenFOAM v2312:
+   ```
+   sudo sh -c "wget -O - https://dl.openfoam.com/add-debian-repo.sh | bash"
+   sudo apt-get install openfoam2312-default
+   echo "source /usr/lib/openfoam/openfoam2312/etc/bashrc" >> ~/.bashrc
+   ```
+3. Manually download SRTM tiles (`S32W071.hgt`, `S32W072.hgt`,
+   `S33W071.hgt`, `S33W072.hgt`) from `dwtkns.com/srtm30m` to
+   `cfd/los_pelambres/dem/`.
+4. `python scripts/cfd/dem_to_stl.py --tiles cfd/los_pelambres/dem/*.hgt --bbox -71.0,-32.0,-70.5,-31.5 --out cfd/los_pelambres/template/constant/triSurface/terrain.stl`.
+5. `python scripts/cfd/run_campaign.py --regime-grid 16x3 --dry-run` to confirm staging.
+6. `python scripts/cfd/run_campaign.py --regime-grid 16x3 --execute` to launch the 48-run campaign (~60-72 h serial). Monitor via `cfd/los_pelambres/runs/<regime>/log.simpleFoam`.
+7. Once complete: `python scripts/cfd/reduce_to_matrix.py --runs-dir cfd/los_pelambres/runs/ --out dispersion_matrix.json` (BA.5 entry point) → persist via API → lifespan promotion fires on next API restart (BA.10).
+8. BA.7 calibration follow-up.
