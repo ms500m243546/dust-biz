@@ -18,12 +18,28 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 ProductionLossLabel = Literal["low", "medium", "high"]
 # Phase AA — plan-relative cost label. Reflects whether the action's
 # tonnes_delayed fits within the shift's remaining slack.
 PlanRelativeLossLabel = Literal["absorbable", "partial", "blocking"]
+
+
+class RiskClassDerivation(BaseModel):
+    """Phase AB — audit trail for context-derived risk class.
+
+    `base` is the catalog floor; `derived` is the class the ranker
+    actually surfaced (escalation only — never below base). `reasons`
+    is the human-readable list of why escalation fired. Empty reasons
+    + base == derived means the catalog floor was unchanged.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    base: str
+    derived: str
+    reasons: list[str] = Field(default_factory=list)
 
 
 class RankedCandidate(BaseModel):
@@ -38,8 +54,11 @@ class RankedCandidate(BaseModel):
     production_loss: ProductionLossLabel
     confidence: float = Field(ge=0.0, le=1.0)
     reason: str
-    risk_class: str
+    risk_class: str  # Phase AB: this is the *derived* class (post-escalation).
     requires_human_approval: bool
+    # Phase AB — the catalog floor and the audit trail for any
+    # context-driven escalation. None on degraded / pre-AB call sites.
+    risk_derivation: RiskClassDerivation | None = None
     # Phase Z — true when the active source attribution names a cause
     # class in this candidate's target_cause_classes. Surfaced by the
     # recommendation orchestrator as a "Cause-targeted" badge.

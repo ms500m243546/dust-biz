@@ -32,11 +32,13 @@ under `requires_human_review` if nothing else qualifies.
 
 from __future__ import annotations
 
+from app.domain.risk_classification import derive_risk_class
 from app.schemas.optimization import (
     PlanRelativeLossLabel,
     ProductionLossLabel,
     RankedCandidate,
     RankedRecommendations,
+    RiskClassDerivation,
 )
 from app.schemas.shift_progress import ShiftProgressSchema
 from app.schemas.simulations import (
@@ -116,12 +118,20 @@ class WeightedOptimizationEngine:
         )
 
         cause_map = candidate_target_cause_classes or {}
-        scored: list[tuple[InterventionSimulationSchema, float, bool, bool]] = []
+        scored: list[
+            tuple[InterventionSimulationSchema, float, bool, bool, str, str, tuple[str, ...]]
+        ] = []
         for cand in candidates:
             low_conf = cand.confidence < low_confidence_threshold
             cand_classes = cause_map.get(cand.intervention_id) or []
             cause_targeted = bool(
                 cause_class is not None and cause_class in cand_classes
+            )
+            base_risk = candidate_risk_classes.get(cand.intervention_id, "low")
+            derived = derive_risk_class(
+                base_risk_class=base_risk,
+                candidate=cand,
+                shift_progress=shift_progress,
             )
             score = _score_candidate(
                 cand=cand,
@@ -131,7 +141,9 @@ class WeightedOptimizationEngine:
                 compliance_triggered=compliance_triggered,
                 cause_targeted=cause_targeted,
             )
-            scored.append((cand, score, low_conf, cause_targeted))
+            scored.append(
+                (cand, score, low_conf, cause_targeted, derived.base, derived.derived, derived.reasons)
+            )
 
         scored.sort(key=lambda t: t[1], reverse=True)
 
@@ -142,7 +154,9 @@ class WeightedOptimizationEngine:
                 score=score,
                 low_confidence=low_conf,
                 breach_before=breach_probability_before,
-                risk_class=candidate_risk_classes.get(cand.intervention_id, "low"),
+                risk_class=derived,
+                base_risk_class=base,
+                risk_escalation_reasons=reasons,
                 requires_approval=candidate_requires_approval.get(
                     cand.intervention_id, True
                 ),
@@ -152,7 +166,7 @@ class WeightedOptimizationEngine:
                     cand=cand, shift_progress=shift_progress
                 ),
             )
-            for i, (cand, score, low_conf, cause_targeted) in enumerate(scored)
+            for i, (cand, score, low_conf, cause_targeted, base, derived, reasons) in enumerate(scored)
         ]
 
         # G6: when no candidate clears the low-confidence threshold,
@@ -312,6 +326,8 @@ def _to_ranked(
     cause_targeted: bool = False,
     cause_class: str | None = None,
     plan_relative_loss: PlanRelativeLossLabel | None = None,
+    base_risk_class: str | None = None,
+    risk_escalation_reasons: tuple[str, ...] = (),
 ) -> RankedCandidate:
     breach_drop = max(0.0, breach_before - cand.breach_probability_after)
     parts: list[str] = []
@@ -337,6 +353,24 @@ def _to_ranked(
         parts.append(f"cause-targeted ({cause_class})")
     if plan_relative_loss is not None:
         parts.append(f"plan-relative loss: {plan_relative_loss}")
+    if (
+        base_risk_class is not None
+        and base_risk_class != risk_class
+        and risk_escalation_reasons
+    ):
+        parts.append(
+            f"risk escalated {base_risk_class}->{risk_class}"
+        )
+
+    risk_derivation = (
+        RiskClassDerivation(
+            base=base_risk_class,
+            derived=risk_class,
+            reasons=list(risk_escalation_reasons),
+        )
+        if base_risk_class is not None
+        else None
+    )
 
     return RankedCandidate(
         rank=rank,
@@ -352,6 +386,7 @@ def _to_ranked(
         requires_human_approval=requires_approval,
         cause_targeted=cause_targeted,
         plan_relative_loss=plan_relative_loss,
+        risk_derivation=risk_derivation,
     )
 
 
