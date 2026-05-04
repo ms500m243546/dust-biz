@@ -116,7 +116,7 @@ def generate_recommendation(
     seed_default_interventions(session)
     catalog = _eligible_catalog(session, zone)
 
-    sims, risk_classes, requires_approval = _simulate_all(
+    sims, risk_classes, requires_approval, cause_classes_map = _simulate_all(
         session=session,
         target_zone_id=target_zone_id,
         catalog=catalog,
@@ -128,6 +128,10 @@ def generate_recommendation(
     sims.append(do_nothing_sim)
     risk_classes[DO_NOTHING_INTERVENTION_ID] = "low"
     requires_approval[DO_NOTHING_INTERVENTION_ID] = False
+    cause_classes_map[DO_NOTHING_INTERVENTION_ID] = []
+
+    attribution_row = _latest_attribution_for_forecast(session, forecast)
+    cause_class = _resolve_cause_class(session, attribution_row)
 
     ensure_optimizer_registered()
     engine: Any = registry.get_current("optimization")
@@ -140,6 +144,8 @@ def generate_recommendation(
         weights=site_cfg.optimization_weights,
         extreme_breach_threshold=site_cfg.extreme_breach_threshold,
         low_confidence_threshold=site_cfg.low_confidence_threshold,
+        cause_class=cause_class,
+        candidate_target_cause_classes=cause_classes_map,
     )
 
     surfaced = _filter_for_review(
@@ -148,7 +154,9 @@ def generate_recommendation(
     )
     actions = [_to_action(c, sim_lookup=_index(sims)) for c in surfaced]
 
-    attribution_id = _latest_attribution_id_for_forecast(session, forecast)
+    attribution_id = (
+        attribution_row.attribution_id if attribution_row is not None else None
+    )
 
     schema = _render(
         recommendation_id=_next_id(session, issued_at),
@@ -198,10 +206,16 @@ def _simulate_all(
     target_zone_id: str,
     catalog: list[InterventionOption],
     now: datetime,
-) -> tuple[list[InterventionSimulationSchema], dict[str, str], dict[str, bool]]:
+) -> tuple[
+    list[InterventionSimulationSchema],
+    dict[str, str],
+    dict[str, bool],
+    dict[str, list[str]],
+]:
     sims: list[InterventionSimulationSchema] = []
     risk_classes: dict[str, str] = {}
     requires_approval: dict[str, bool] = {}
+    cause_classes_map: dict[str, list[str]] = {}
     for entry in catalog:
         sim = simulate_intervention(
             session=session,
@@ -212,7 +226,10 @@ def _simulate_all(
         sims.append(sim)
         risk_classes[entry.intervention_id] = entry.risk_class
         requires_approval[entry.intervention_id] = entry.requires_human_approval
-    return sims, risk_classes, requires_approval
+        cause_classes_map[entry.intervention_id] = list(
+            entry.target_cause_classes or []
+        )
+    return sims, risk_classes, requires_approval, cause_classes_map
 
 
 def _filter_for_review(
@@ -267,14 +284,16 @@ def _index(
     return {s.simulation_id: s for s in sims}
 
 
-def _latest_attribution_id_for_forecast(
+def _latest_attribution_for_forecast(
     session: Session, forecast: DustPrediction
-) -> str | None:
-    """Best-effort link to the latest attribution for a related dust event.
+) -> SourceAttribution | None:
+    """Best-effort link to the latest attribution row for the same station.
 
     Recommendations don't require an attribution to issue. When one is
-    available for the same target_id, surface its ID so the dashboard
-    can show "Cause: ..." alongside "Risk: ...".
+    available, the orchestrator uses it for two things: (1) link the
+    attribution_id into the persisted recommendation; (2) resolve the
+    top probable source's zone_type as the Phase Z cause class so the
+    optimizer can apply the cause-coupling boost.
     """
     repo = SourceAttributionRepository(session)
     rows = repo.get_recent(
@@ -283,8 +302,43 @@ def _latest_attribution_id_for_forecast(
     )
     for row in rows:
         if row.affected_station == forecast.target_id:
-            return row.attribution_id
+            return row
     return None
+
+
+def _resolve_cause_class(
+    session: Session, attribution: SourceAttribution | None
+) -> str | None:
+    """Phase Z — resolve the cause-class hint from the top probable source.
+
+    The attribution model writes ranked sources keyed by `zone_id`
+    (plus the `external_background` floor). We pull the top entry and
+    look up its zone to get the canonical zone_type — that's the cause
+    class. Returns None when:
+      - no attribution row, or
+      - the top source isn't a real zone (Unknown / external_background), or
+      - the named zone has been deleted since attribution time.
+
+    A None return means the optimizer skips the cause-coupling boost
+    entirely; no candidate is preferred over another on cause grounds.
+    """
+    if attribution is None:
+        return None
+    sources = attribution.probable_sources or []
+    if not sources:
+        return None
+    top = sources[0]
+    if not isinstance(top, dict):
+        return None
+    source_id = top.get("source")
+    if not isinstance(source_id, str) or not source_id:
+        return None
+    if source_id in {"Unknown", "external_background"}:
+        return None
+    zone = session.get(Zone, source_id)
+    if zone is None:
+        return None
+    return zone.zone_type
 
 
 def _next_id(session: Session, issued_at: datetime) -> str:
@@ -315,6 +369,11 @@ def _render(
     reason_lines.append(f"Risk: PM10 breach likely at {forecast.target_id}.")
     if attribution_id is not None:
         reason_lines.append(f"Cause: see attribution {attribution_id}.")
+    cause_class = getattr(ranked, "cause_class", None)
+    if cause_class:
+        reason_lines.append(
+            f"Cause class: {cause_class}; cause-targeted actions preferred."
+        )
     if ranked.compliance_priority_triggered:
         reason_lines.append(
             "Extreme breach risk - compliance prioritized over production."
@@ -401,7 +460,7 @@ __all__ = [
 ]
 
 
-# Forward import for SourceAttribution model (lazy reference avoids
-# unused-import noise when only the row-class is needed at runtime in
-# `_latest_attribution_id_for_forecast`).
+# SourceAttribution is now used directly by `_latest_attribution_for_forecast`
+# and `_resolve_cause_class`; the explicit reference below is no longer
+# needed but kept as a defensive anchor against accidental import pruning.
 _ = SourceAttribution

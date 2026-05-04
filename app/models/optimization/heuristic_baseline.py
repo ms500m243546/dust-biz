@@ -77,6 +77,8 @@ class WeightedOptimizationEngine:
         weights: OptimizationWeightsSchema,
         extreme_breach_threshold: float = EXTREME_BREACH_DEFAULT,
         low_confidence_threshold: float = LOW_CONFIDENCE_DEFAULT,
+        cause_class: str | None = None,
+        candidate_target_cause_classes: dict[str, list[str]] | None = None,
     ) -> RankedRecommendations:
         """Rank candidates by weighted score.
 
@@ -90,17 +92,23 @@ class WeightedOptimizationEngine:
             extreme_breach_threshold=extreme_breach_threshold,
         )
 
-        scored: list[tuple[InterventionSimulationSchema, float, bool]] = []
+        cause_map = candidate_target_cause_classes or {}
+        scored: list[tuple[InterventionSimulationSchema, float, bool, bool]] = []
         for cand in candidates:
             low_conf = cand.confidence < low_confidence_threshold
+            cand_classes = cause_map.get(cand.intervention_id) or []
+            cause_targeted = bool(
+                cause_class is not None and cause_class in cand_classes
+            )
             score = _score_candidate(
                 cand=cand,
                 breach_probability_before=breach_probability_before,
                 weights=active_weights,
                 low_confidence=low_conf,
                 compliance_triggered=compliance_triggered,
+                cause_targeted=cause_targeted,
             )
-            scored.append((cand, score, low_conf))
+            scored.append((cand, score, low_conf, cause_targeted))
 
         scored.sort(key=lambda t: t[1], reverse=True)
 
@@ -115,8 +123,10 @@ class WeightedOptimizationEngine:
                 requires_approval=candidate_requires_approval.get(
                     cand.intervention_id, True
                 ),
+                cause_targeted=cause_targeted,
+                cause_class=cause_class,
             )
-            for i, (cand, score, low_conf) in enumerate(scored)
+            for i, (cand, score, low_conf, cause_targeted) in enumerate(scored)
         ]
 
         # G6: when no candidate clears the low-confidence threshold,
@@ -154,6 +164,7 @@ class WeightedOptimizationEngine:
             overall_confidence=overall_conf,
             overall_reason=overall_reason,
             model_version=self.model_version,
+            cause_class=cause_class,
         )
 
 
@@ -187,6 +198,7 @@ def _score_candidate(
     weights: OptimizationWeightsSchema,
     low_confidence: bool,
     compliance_triggered: bool,
+    cause_targeted: bool = False,
 ) -> float:
     breach_drop = max(0.0, breach_probability_before - cand.breach_probability_after)
 
@@ -202,6 +214,11 @@ def _score_candidate(
         # a "do nothing" candidate doesn't get inflated under extreme
         # risk just because the bonus exists.
         score += weights.w_compliance * breach_drop
+    # Phase Z — cause-coupling boost. Only applies when the candidate
+    # actually reduces breach risk; otherwise a "do nothing" with a
+    # matching cause class would slip past more useful actions.
+    if cause_targeted and breach_drop > 0:
+        score += weights.w_cause_match
     return round(score, 4)
 
 
@@ -214,6 +231,8 @@ def _to_ranked(
     breach_before: float,
     risk_class: str,
     requires_approval: bool,
+    cause_targeted: bool = False,
+    cause_class: str | None = None,
 ) -> RankedCandidate:
     breach_drop = max(0.0, breach_before - cand.breach_probability_after)
     parts: list[str] = []
@@ -235,6 +254,8 @@ def _to_ranked(
         parts.append("high production impact")
     if low_confidence:
         parts.append("low simulation confidence")
+    if cause_targeted and cause_class:
+        parts.append(f"cause-targeted ({cause_class})")
 
     return RankedCandidate(
         rank=rank,
@@ -248,6 +269,7 @@ def _to_ranked(
         reason="; ".join(parts),
         risk_class=risk_class,
         requires_human_approval=requires_approval,
+        cause_targeted=cause_targeted,
     )
 
 

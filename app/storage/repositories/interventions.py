@@ -35,7 +35,9 @@ class InterventionOptionRepository(BaseRepository):
         automation_eligible_levels: list[str],
         estimated_time_to_effect_minutes: int,
         allowed_zone_types: list[str],
+        target_cause_classes: list[str] | None = None,
     ) -> InterventionOption:
+        cause_classes = list(target_cause_classes or [])
         existing = self.session.get(InterventionOption, intervention_id)
         if existing is None:
             row = InterventionOption(
@@ -47,6 +49,7 @@ class InterventionOptionRepository(BaseRepository):
                 automation_eligible_levels=list(automation_eligible_levels),
                 estimated_time_to_effect_minutes=estimated_time_to_effect_minutes,
                 allowed_zone_types=list(allowed_zone_types),
+                target_cause_classes=cause_classes,
             )
             self.session.add(row)
         else:
@@ -57,6 +60,7 @@ class InterventionOptionRepository(BaseRepository):
             existing.automation_eligible_levels = list(automation_eligible_levels)
             existing.estimated_time_to_effect_minutes = estimated_time_to_effect_minutes
             existing.allowed_zone_types = list(allowed_zone_types)
+            existing.target_cause_classes = cause_classes
             row = existing
         self.session.flush()
         return row

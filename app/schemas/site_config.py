@@ -50,6 +50,11 @@ class OptimizationWeightsSchema(BaseModel):
     w_disruption: float = Field(default=0.5, ge=0.0)
     w_low_confidence: float = Field(default=0.5, ge=0.0)
     w_compliance: float = Field(default=1.0, ge=0.0)
+    # Phase Z — additive boost for candidates whose target_cause_classes
+    # contain the active source attribution's cause class. Set to 0.0 to
+    # disable cause-coupling for a site (default 0.3 modestly favours
+    # cause-targeted actions without overriding breach reduction).
+    w_cause_match: float = Field(default=0.3, ge=0.0)
 
 
 class SiteConfigSchema(BaseModel):

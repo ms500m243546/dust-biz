@@ -32,6 +32,7 @@ class _CatalogEntry(TypedDict):
     automation_eligible_levels: list[str]
     estimated_time_to_effect_minutes: int
     allowed_zone_types: list[str]
+    target_cause_classes: list[str]
 
 
 DEFAULT_INTERVENTIONS: list[_CatalogEntry] = [
@@ -55,6 +56,9 @@ DEFAULT_INTERVENTIONS: list[_CatalogEntry] = [
             "loading_area",
             "boundary",
         ],
+        # Cause-agnostic monitoring action; receives no Phase Z boost
+        # regardless of attribution. Empty target_cause_classes = neutral.
+        "target_cause_classes": [],
     },
     {
         "intervention_id": "raise_alert",
@@ -76,6 +80,7 @@ DEFAULT_INTERVENTIONS: list[_CatalogEntry] = [
             "loading_area",
             "boundary",
         ],
+        "target_cause_classes": [],
     },
     {
         "intervention_id": "water_road",
@@ -89,6 +94,7 @@ DEFAULT_INTERVENTIONS: list[_CatalogEntry] = [
         "automation_eligible_levels": [],
         "estimated_time_to_effect_minutes": 10,
         "allowed_zone_types": ["haul_road"],
+        "target_cause_classes": ["haul_road"],
     },
     {
         "intervention_id": "reduce_speed",
@@ -102,6 +108,7 @@ DEFAULT_INTERVENTIONS: list[_CatalogEntry] = [
         "automation_eligible_levels": [],
         "estimated_time_to_effect_minutes": 10,
         "allowed_zone_types": ["haul_road"],
+        "target_cause_classes": ["haul_road"],
     },
     {
         "intervention_id": "reroute_trucks",
@@ -115,6 +122,7 @@ DEFAULT_INTERVENTIONS: list[_CatalogEntry] = [
         "automation_eligible_levels": [],
         "estimated_time_to_effect_minutes": 20,
         "allowed_zone_types": ["haul_road"],
+        "target_cause_classes": ["haul_road"],
     },
     {
         "intervention_id": "throttle_crusher",
@@ -128,6 +136,7 @@ DEFAULT_INTERVENTIONS: list[_CatalogEntry] = [
         "automation_eligible_levels": [],
         "estimated_time_to_effect_minutes": 15,
         "allowed_zone_types": ["crusher"],
+        "target_cause_classes": ["crusher"],
     },
     {
         "intervention_id": "pause_loading",
@@ -141,6 +150,7 @@ DEFAULT_INTERVENTIONS: list[_CatalogEntry] = [
         "automation_eligible_levels": [],
         "estimated_time_to_effect_minutes": 15,
         "allowed_zone_types": ["pit", "loading_area"],
+        "target_cause_classes": ["pit", "loading_area"],
     },
 ]
 
@@ -170,6 +180,7 @@ def seed_default_interventions(session: Session) -> int:
             automation_eligible_levels=list(entry["automation_eligible_levels"]),
             estimated_time_to_effect_minutes=entry["estimated_time_to_effect_minutes"],
             allowed_zone_types=list(entry["allowed_zone_types"]),
+            target_cause_classes=list(entry["target_cause_classes"]),
         )
         inserted += 1
     return inserted

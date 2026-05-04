@@ -37,6 +37,10 @@ class RankedCandidate(BaseModel):
     reason: str
     risk_class: str
     requires_human_approval: bool
+    # Phase Z — true when the active source attribution names a cause
+    # class in this candidate's target_cause_classes. Surfaced by the
+    # recommendation orchestrator as a "Cause-targeted" badge.
+    cause_targeted: bool = False
 
 
 class RankedRecommendations(BaseModel):
@@ -50,3 +54,7 @@ class RankedRecommendations(BaseModel):
     overall_confidence: float = Field(ge=0.0, le=1.0)
     overall_reason: str
     model_version: str
+    # Phase Z — the cause class (zone_type) the optimizer used to apply
+    # the cause-match boost. None when no attribution was available or
+    # the attributed source has no resolvable zone_type.
+    cause_class: str | None = None

@@ -28,3 +28,12 @@ class InterventionOption(Base):
     )
     estimated_time_to_effect_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
     allowed_zone_types: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    # Phase Z — cause classes this intervention is designed to address.
+    # Drawn from the zone-type vocabulary (haul_road, crusher, pit, etc.).
+    # When the active source attribution names a zone whose type is in
+    # this list, the optimizer adds `w_cause_match` to the candidate's
+    # score. Empty list = no preference (no boost ever); legacy rows
+    # without the column behave the same way.
+    target_cause_classes: Mapped[list[str]] = mapped_column(
+        JSON, default=list, nullable=True
+    )
