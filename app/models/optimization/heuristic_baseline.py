@@ -33,10 +33,12 @@ under `requires_human_review` if nothing else qualifies.
 from __future__ import annotations
 
 from app.schemas.optimization import (
+    PlanRelativeLossLabel,
     ProductionLossLabel,
     RankedCandidate,
     RankedRecommendations,
 )
+from app.schemas.shift_progress import ShiftProgressSchema
 from app.schemas.simulations import (
     DO_NOTHING_INTERVENTION_ID,
     InterventionSimulationSchema,
@@ -48,6 +50,22 @@ OPTIMIZER_VERSION = "optimization_weighted_v0.1.0"
 EXTREME_BREACH_DEFAULT = 0.85
 ELEVATED_BREACH_DEFAULT = 0.5
 LOW_CONFIDENCE_DEFAULT = 0.5
+
+# Phase AA — slack_ratio rescale clamps. The multiplier on
+# w_production is `1.0 / clamp(slack_ratio, MIN, MAX)`, so MIN sets
+# the maximum production-weight inflation when the shift is far
+# behind plan, and MAX sets the maximum deflation when far ahead.
+# Wide-but-bounded — sensor noise can push slack_ratio to extremes
+# briefly, and we don't want a transient swing to flip the
+# recommendation across regimes.
+SHIFT_SLACK_MIN = 0.3   # behind plan — max production weight x ~3.3
+SHIFT_SLACK_MAX = 3.0   # ahead of plan — min production weight ~0.33
+
+# Phase AA — plan-relative loss thresholds. `relative_loss` is
+# `tonnes_delayed / shift_target_tonnes`. Multiplied by 1/slack_ratio
+# so the same delay reads as more painful when behind plan.
+PLAN_RELATIVE_ABSORBABLE_FRAC = 0.03
+PLAN_RELATIVE_BLOCKING_FRAC = 0.10
 
 # Cost-class catalog cross-check; we don't import the catalog here
 # (would create a Domain->Model upward import). The orchestrator hands
@@ -79,6 +97,7 @@ class WeightedOptimizationEngine:
         low_confidence_threshold: float = LOW_CONFIDENCE_DEFAULT,
         cause_class: str | None = None,
         candidate_target_cause_classes: dict[str, list[str]] | None = None,
+        shift_progress: ShiftProgressSchema | None = None,
     ) -> RankedRecommendations:
         """Rank candidates by weighted score.
 
@@ -90,6 +109,10 @@ class WeightedOptimizationEngine:
             weights=weights,
             breach_probability_before=breach_probability_before,
             extreme_breach_threshold=extreme_breach_threshold,
+        )
+        active_weights = _apply_shift_slack_rescale(
+            weights=active_weights,
+            shift_progress=shift_progress,
         )
 
         cause_map = candidate_target_cause_classes or {}
@@ -125,6 +148,9 @@ class WeightedOptimizationEngine:
                 ),
                 cause_targeted=cause_targeted,
                 cause_class=cause_class,
+                plan_relative_loss=_plan_relative_loss(
+                    cand=cand, shift_progress=shift_progress
+                ),
             )
             for i, (cand, score, low_conf, cause_targeted) in enumerate(scored)
         ]
@@ -165,7 +191,59 @@ class WeightedOptimizationEngine:
             overall_reason=overall_reason,
             model_version=self.model_version,
             cause_class=cause_class,
+            shift_slack_ratio=(
+                shift_progress.slack_ratio if shift_progress is not None else None
+            ),
         )
+
+
+def _apply_shift_slack_rescale(
+    *,
+    weights: OptimizationWeightsSchema,
+    shift_progress: ShiftProgressSchema | None,
+) -> OptimizationWeightsSchema:
+    """Phase AA — scale w_production by 1/clamp(slack_ratio).
+
+    Tight shifts (slack < 1) inflate the production-cost weight so the
+    ranker prefers cheaper actions. Slack shifts (slack > 1) deflate
+    it so the ranker is willing to pay more to drive breach risk down.
+
+    Returns `weights` unchanged when no shift_progress is supplied —
+    the call site is pre-AA or the resolver couldn't compute progress.
+    """
+    if shift_progress is None:
+        return weights
+    clamped = max(SHIFT_SLACK_MIN, min(SHIFT_SLACK_MAX, shift_progress.slack_ratio))
+    if clamped <= 0.0:
+        return weights
+    multiplier = 1.0 / clamped
+    return weights.model_copy(
+        update={"w_production": weights.w_production * multiplier}
+    )
+
+
+def _plan_relative_loss(
+    *,
+    cand: InterventionSimulationSchema,
+    shift_progress: ShiftProgressSchema | None,
+) -> PlanRelativeLossLabel | None:
+    """Classify `tonnes_delayed` against shift slack.
+
+    `relative_loss = (tonnes_delayed / shift_target_tonnes) / slack_ratio`
+    — same delay reads as more painful when behind plan.
+    """
+    if shift_progress is None or shift_progress.shift_target_tonnes <= 0.0:
+        return None
+    slack = max(SHIFT_SLACK_MIN, min(SHIFT_SLACK_MAX, shift_progress.slack_ratio))
+    if slack <= 0.0:
+        return None
+    raw = cand.production_loss_tonnes / shift_progress.shift_target_tonnes
+    relative = raw / slack
+    if relative <= PLAN_RELATIVE_ABSORBABLE_FRAC:
+        return "absorbable"
+    if relative >= PLAN_RELATIVE_BLOCKING_FRAC:
+        return "blocking"
+    return "partial"
 
 
 def _resolve_weights(
@@ -233,6 +311,7 @@ def _to_ranked(
     requires_approval: bool,
     cause_targeted: bool = False,
     cause_class: str | None = None,
+    plan_relative_loss: PlanRelativeLossLabel | None = None,
 ) -> RankedCandidate:
     breach_drop = max(0.0, breach_before - cand.breach_probability_after)
     parts: list[str] = []
@@ -256,6 +335,8 @@ def _to_ranked(
         parts.append("low simulation confidence")
     if cause_targeted and cause_class:
         parts.append(f"cause-targeted ({cause_class})")
+    if plan_relative_loss is not None:
+        parts.append(f"plan-relative loss: {plan_relative_loss}")
 
     return RankedCandidate(
         rank=rank,
@@ -270,6 +351,7 @@ def _to_ranked(
         risk_class=risk_class,
         requires_human_approval=requires_approval,
         cause_targeted=cause_targeted,
+        plan_relative_loss=plan_relative_loss,
     )
 
 

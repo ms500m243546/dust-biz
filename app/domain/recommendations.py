@@ -39,6 +39,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.domain.interventions import seed_default_interventions
+from app.domain.shift_progress import compute_shift_progress
 from app.domain.simulation import (
     NoForecastError,
     ZoneNotFoundError,
@@ -133,6 +134,13 @@ def generate_recommendation(
     attribution_row = _latest_attribution_for_forecast(session, forecast)
     cause_class = _resolve_cause_class(session, attribution_row)
 
+    shift_progress = compute_shift_progress(
+        session=session,
+        mine_id=zone.mine_id,
+        now=issued_at,
+        cost_curves=site_cfg.cost_curves,
+    )
+
     ensure_optimizer_registered()
     engine: Any = registry.get_current("optimization")
     ranked = engine.rank_actions(
@@ -146,6 +154,7 @@ def generate_recommendation(
         low_confidence_threshold=site_cfg.low_confidence_threshold,
         cause_class=cause_class,
         candidate_target_cause_classes=cause_classes_map,
+        shift_progress=shift_progress,
     )
 
     surfaced = _filter_for_review(
@@ -374,6 +383,16 @@ def _render(
         reason_lines.append(
             f"Cause class: {cause_class}; cause-targeted actions preferred."
         )
+    slack = getattr(ranked, "shift_slack_ratio", None)
+    if isinstance(slack, (int, float)):
+        if slack < 0.85:
+            reason_lines.append(
+                f"Shift behind plan (slack {slack:.2f}); production weight up."
+            )
+        elif slack > 1.15:
+            reason_lines.append(
+                f"Shift ahead of plan (slack {slack:.2f}); production weight down."
+            )
     if ranked.compliance_priority_triggered:
         reason_lines.append(
             "Extreme breach risk - compliance prioritized over production."

@@ -21,6 +21,9 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 ProductionLossLabel = Literal["low", "medium", "high"]
+# Phase AA — plan-relative cost label. Reflects whether the action's
+# tonnes_delayed fits within the shift's remaining slack.
+PlanRelativeLossLabel = Literal["absorbable", "partial", "blocking"]
 
 
 class RankedCandidate(BaseModel):
@@ -41,6 +44,9 @@ class RankedCandidate(BaseModel):
     # class in this candidate's target_cause_classes. Surfaced by the
     # recommendation orchestrator as a "Cause-targeted" badge.
     cause_targeted: bool = False
+    # Phase AA — plan-relative production loss label. None when no
+    # shift_progress was supplied (degraded / pre-AA call sites).
+    plan_relative_loss: PlanRelativeLossLabel | None = None
 
 
 class RankedRecommendations(BaseModel):
@@ -58,3 +64,8 @@ class RankedRecommendations(BaseModel):
     # the cause-match boost. None when no attribution was available or
     # the attributed source has no resolvable zone_type.
     cause_class: str | None = None
+    # Phase AA — slack_ratio (tonnes_done / expected_done) used to
+    # rescale w_production. 1.0 = on plan; >1 = ahead; <1 = behind.
+    # None means no shift_progress was supplied and the rescale was
+    # skipped.
+    shift_slack_ratio: float | None = None
