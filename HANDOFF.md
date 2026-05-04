@@ -1,182 +1,150 @@
 # DustOps AI — Session Handoff
 
 **As of:** 2026-05-03
-**Active phase:** **Phase W.2 complete — END of T→W batch.** 21 sub-phase commits this session across 8 phases (P → Q → R → S → T → U → V → W). System now has real models at every learnable layer (forecast / intervention / cost) + bias mitigations + UI surfaces + continuous-learning hooks.
-**Last completed:** W.2 — drift-triggered retrain endpoint + audit-trail behaviour.
-**Validation gate:** `npm run agent-check` GREEN, **22 PASS / 0 SKIP / 0 FAIL**. 6XX backend tests + 46 web tests.
+**Active phase:** **Phase AE.0 complete — END of decision-quality batch (X → AE.0).** 9 phase commits + 1 bias-register commit on top of Phase W. The system now closes 6 of the 6 architectural tensions in the recommendation engine; Phase AE remains deferred (kill-switch fired correctly: synthetic spike not load-bearing).
+**Last completed:** AE.0 — continuous-knob spike (synthetic verdict GO, real verdict gated on partnership data → AE deferred).
+**Validation gate:** `npm run agent-check` GREEN, **22 PASS / 0 SKIP / 0 FAIL**. 767 backend tests + 46 web tests.
 
 ---
 
-## State at handoff
+## Decision-quality batch summary (X → AE.0)
 
-- Working tree clean. All 21 sub-phases committed.
-- Recent commits (newest first):
-  - `16c7ace` Phase W.2 — drift-triggered retrain endpoint
-  - `6cbeb64` Phase W.1 — scheduled weekly retrain
-  - `b0d7f67` Phase V.3 — confidence-propagation regression suite
-  - `2fd22cd` Phase V.2 — audit-trail model_version consistency
-  - `25d37c2` Phase V.1 — registry-state integration tests
-  - `84cf2af` Phase U.2 — cycle-time cost auto-promotion
-  - `8216d78` Phase U.1 — cycle-time-aware cost model
-  - `2f3bbce` Phase T.3 — EvidenceClass distribution chart
-  - `c723b69` Phase T.2 — multi-station caveat banners
-  - `93a6835` Phase T.1 — per-receptor fairness panel
-  - `922ca79` Phase S.2 — logreg attribution auto-promotion
-  - `a21e474` Phase S.1 — logreg source-attribution model
-  - `49da735` Phase R.2 — intervention calibration + AP-42 promotion
-  - `5c95fa8` Phase R.1 — AP-42 physics intervention model
-  - `dbd71eb` Phase Q.3 — multi-station discipline (B-5/B-6/B-14 closure)
-  - `3f7ede3` Phase Q.2 — shared multi-station GBM
-  - `f2597e3` Phase Q.1 — multi-station GBM expansion
-  - `6304954` Phase P.3 — GBM auto-promotion via lifespan hook
-  - `a996275` Phase P.2 — real GBM fit on Cuncumén
-  - `1b33207` Phase P.1 — first trained-forecast scaffold
-  - `d1fbec1` Phase O.2 — multi-mine SINCA survey + connector fix
-- Rollback log spans `phase-p1-pre-scaffold` through `phase-w2-pre-drift-retrain` — one snapshot per sub-phase.
-- DB state: 4 new nullable columns on `equipment` (O.1, AP-42 inputs). 6 `model_performance_metrics` rows persisted (5 per-station GBM + 1 shared). Heuristic baselines remain registered as fallbacks per Guardrail 11 at every layer.
+The user asked: *"how does the system actually decide where to reduce or cut output?"* Six tensions fell out of the design review; this batch closes all of them.
+
+| Tension | Phase | Mechanism |
+|---|---|---|
+| 1 — discrete catalog vs continuous | AE.0 | Spike framework + synthetic GO verdict; AE deferred until non-synthetic corpus exists |
+| 2 — attribution↔intervention coupling | Z | `target_cause_classes` + ranker `w_cause_match` boost |
+| 3 — single-zone scope | AD | `resource_classes` + `solve_joint_recommendations` greedy bundler |
+| 4 — temporal optimization (when) | AC | `decide_trigger_time` + `recommended_trigger_minutes_from_now` |
+| 5 — plan-blind cost | AA | `compute_shift_progress` + `slack_ratio` rescale of `w_production` |
+| 6 — static catalog risk class | AB | `derive_risk_class(base, context)` — escalate-only, audit trail |
+
+Plus two adjacent quality-of-life phases:
+
+| Goal | Phase | Mechanism |
+|---|---|---|
+| Promote shared multi-station GBM when it beats per-station | X | `decide_shared_promotion` + lifespan hook |
+| Class-imbalance recall lift on noisy receptors | Y | `class_weight="balanced"` on the breach classifier |
 
 ---
 
-## Real-data corpus driving the models
+## Commits this batch (newest first)
 
-- **PM10 sensor readings**: 148,752 (PIT-versioned)
-- **Weather readings**: 70,272 (Open-Meteo / ERA5)
-- **Mines registered**: 5 (Los Pelambres, Los Bronces, Chuquicamata, Centinela, +baseline)
-- **Sensor stations**: 22 (5 SINCA-public with real PM10 data)
+- `a218e63` Phase AE.0 — continuous-knob spike (kill-switch + framework)
+- `3b84637` Phase AD — multi-zone joint optimization
+- `0d49c35` Phase Y — class-imbalance mitigation via `class_weight="balanced"`
+- `20d836b` Phase AC — temporal trigger optimization (when, not just what)
+- `1f610b6` Bias register — B-46 (cause-action mismatch) + B-47 (plan-blind cost)
+- `985cade` Phase AB — context-derived risk class with escalation audit
+- `1da6619` Phase AA — plan-relative cost via `shift_progress` + slack rescale
+- `173c7a0` Phase Z — attribution-coupled ranking via `target_cause_classes`
+- `f267157` Phase X — promote shared multi-station GBM when it beats per-station
 
-12-month corpus by station (the training corpus):
+Rollback log spans `phase-x-pre-shared-promotion` through `phase-ae0-pre-spike` — one snapshot per phase.
 
-| Station | Mine | Records | Density |
+---
+
+## Bias register changes
+
+| ID | Status before | Status after | Phase |
 |---|---|---|---|
-| `chq-club-23-marzo` | Chuquicamata | 8,670 | ~99% |
-| `lp-em05-cuncumen` | Los Pelambres | 8,604 | ~98% |
-| `cnt-sierra-gorda` | Centinela | 7,017 | ~80% |
-| `lb-las-condes` | Los Bronces | 6,959 | ~79% |
-| `chq-calama-centro` | Chuquicamata | 5,764 | ~66% (skipped per-station, included in shared) |
+| B-8 (class imbalance) | Open | **Mitigated** | Y |
+| B-46 (cause-action mismatch) | *new* | **Mitigated** | Z |
+| B-47 (plan-blind cost) | *new* | **Mitigated** | AA |
+
+10 numbered biases now have code-level mitigations enforced by the agent-check gate (was 8 at end of Phase W).
 
 ---
 
 ## Models currently `current` on the dev DB
 
-After the FastAPI lifespan hook runs:
+After the FastAPI lifespan hook runs (Phase X promotion logic):
 
 | Layer | `current` model | Promotion path |
 |---|---|---|
-| Forecast | `dust_forecast_gbm_v0.1.0` | P.3 — `decide_promotion()` over latest M.4 metric row passed |
-| Intervention impact | `intervention_impact_ap42_v0.1.0` | R.2 — sanity-band probe passed (deferred mode, 0 outcomes) |
-| Production cost | `production_cost_cycle_time_v0.1.0` | U.2 — sanity-band probe passed |
-| Source attribution | `source_attribution_rules_v0.1.0` (baseline) | S.2 — held; no logreg artifact persisted on dev DB |
+| Forecast | `dust_forecast_gbm_v0.1.0` (per-station) → flips to `dust_forecast_gbm_shared_v0.1.0` if per-receptor MAE non-worse on every station and strictly better on one | X — `decide_shared_promotion` |
+| Intervention impact | `intervention_impact_ap42_v0.1.0` | R.2 (unchanged) |
+| Production cost | `production_cost_cycle_time_v0.1.0` | U.2 (unchanged) |
+| Source attribution | `source_attribution_rules_v0.1.0` | S.2 (unchanged; logreg artifact still not persisted) |
 
-To promote logreg attribution: train it via `train_logreg_attributor` against a candidate corpus, then re-bootstrap.
+Class imbalance handling (Phase Y) applies on the next training run; existing artifacts use the pre-Y vanilla classifier until retrain fires.
 
 ---
 
-## Headline forecast performance (sealed test 2026-04-01 → 2026-05-03)
+## What the recommendation engine now considers
 
-### Per-station GBM (`dust_forecast_gbm_v0.1.0`)
+Per call to `generate_recommendation(target_zone_id=...)`:
 
-| Station | test_n | ECE | MAE PM10 | breach_recall |
-|---|---|---|---|---|
-| `lp-em05-cuncumen` | 758 | ~2e-15 | **9.25 µg/m³** | n/a* |
-| `lb-las-condes` | 427 | 0.0023 | **11.29 µg/m³** | 0.00 |
-| `chq-club-23-marzo` | 757 | 0.0 | **1.68 µg/m³** | n/a* |
-| `cnt-sierra-gorda` | 767 | 0.0143 | **26.09 µg/m³** | 0.10 |
+1. **Forecast** for target zone (per-station GBM or shared, depending on Phase X promotion).
+2. **Attribution** for target station; top probable_source's zone_type → `cause_class`.
+3. **Catalog filter** by `allowed_zone_types`.
+4. **Per-candidate simulation**: AP-42 + cycle-time + simulator confidence joins.
+5. **Shift progress**: live `dumping`-tonnage sum across mine zones, or synthetic from `cost_curves` overrides → `slack_ratio`.
+6. **Forecast track**: synthesised flat track (deferred-mode placeholder for multi-horizon).
+7. **Per-candidate scoring** with all rescales and boosts:
+   - Three compliance regimes (balanced / elevated / extreme) per breach probability.
+   - `w_production` rescaled by `1/clamp(slack_ratio, 0.3, 3.0)`.
+   - `w_cause_match` boost when `cause_class ∈ candidate.target_cause_classes` (gated on actual breach reduction).
+8. **Per-candidate context decoration**:
+   - `derive_risk_class(base, shift_progress)` — escalate when deep behind plan or end-of-shift exposure.
+   - `decide_trigger_time(forecast_track, time_to_effect)` — emits `recommended_trigger_minutes_from_now` + `act_now`.
+   - `_plan_relative_loss(...)` — `absorbable / partial / blocking`.
+9. **G6 review filter**: drop medium/high-risk actions when `requires_human_review`.
+10. **(New endpoint TBD) Joint solver**: when multiple zones are at risk simultaneously, `solve_joint_recommendations` resolves resource conflicts by greedy assignment with audit trail. The existing single-zone endpoint stays.
 
-\* No breach events in the sealed window (B-8 class imbalance — expected).
+---
 
-### Shared multi-station GBM (`dust_forecast_gbm_shared_v0.1.0`)
+## Honest deferrals carried into next session
 
-| Aggregate | Value |
+| Item | Blocker |
 |---|---|
-| Train rows | 30,017 |
-| Test rows | 2,709 |
-| Aggregate ECE | **0.003** |
-| Aggregate MAE PM10 | **11.05 µg/m³** |
-| Aggregate breach_recall | **0.091** |
-
-Per-receptor MAE in the shared model **wins on every station and gains most on the noisiest** (Sierra Gorda 26.09 → 22.40). Cross-station signal is doing real work.
-
----
-
-## Bias register status
-
-| ID | Status | Phase |
-|---|---|---|
-| B-5 (survivorship) | **Mitigated** | Q.3 |
-| B-6 (selection) | **Mitigated** | Q.3 |
-| B-12 (concept drift) | **Mitigated** | M.4.3 |
-| B-14 (distribution shift) | **Mitigated** | Q.3 |
-| B-18 (confounding) | **Mitigated** | M.4.1 |
-| B-30 (calibration) | **Mitigated** | M.4.1 |
-| B-32 (receptor asymmetry) | **Mitigated** | M.4.2 |
-| B-44 (Goodhart) | **Mitigated** | M.4.2 |
-
-8 numbered biases now have code-level mitigations enforced by the agent-check gate.
-
-Still open (gated on partnership data or net-new engineering):
-- B-7 (sampling bias when sensor offline correlates with weather)
-- B-13 (long-term calibration drift)
-- B-25 (recency bias in retraining — partial via covariate discipline)
-- B-29 (stationarity claim)
-- B-31 (Simpson's paradox / aggregation)
-- B-35 (Chile DST)
-- B-40 / B-42 (RCA schema drift / label noise)
-
----
-
-## Honest deferral list (partnership-gated, not engineering-gated)
-
-| Gap | Blocker |
-|---|---|
-| AP-42 + cycle-time empirical calibration | 0 `ActionOutcome` rows; needs telematics |
-| Logreg attribution as `current` | No fitted artifact on dev DB; needs labelled corpus |
-| Real labelled `DustEvent` corpus | Partnership-gated |
-| Calama Centro per-station fit | 66% density; thin-station handling |
-| Per-receptor ECE breakdown | `_per_receptor_breakdown` only computes MAE/recall/precision/FPR |
-| AERMOD/CALPUFF dispersion | ≥ 2 receptors per mine; receptor-density gated |
-| Phase M.3.3 true intervention-window cutoff | Operator-real telematics |
-| Per-mine back-fill of O.1 truck geometry | OEM datasheet entry (one-time data exercise) |
+| AE (continuous-knob optimisation) | `ActionOutcome` rows + calibrated AP-42 / cycle-time required to run a non-synthetic AE.0 spike. |
+| Multi-horizon forecast track | Per-horizon GBM artifacts are only trained for `60min`. Real multi-horizon training is a follow-up. |
+| AD joint endpoint | Solver shipped; `POST /api/v1/recommendations/joint` route is mechanical wiring — partnership-gated on multi-zone real-time data. |
+| Logreg attribution promotion | No fitted artifact on dev DB (carry-over from Phase W). |
+| Real labelled `DustEvent` corpus | Partnership-gated. |
+| Calama Centro per-station fit | 66% density. |
+| AERMOD/CALPUFF dispersion | ≥ 2 receptors per mine. |
+| Per-mine back-fill of O.1 truck geometry | OEM datasheet entry. |
 
 ---
 
 ## Concrete next-session priorities
 
-1. **Run the weekly retrain manually once** to confirm the lifespan hook + scheduler integration produce a fresh metric_payload row on the dev DB.
-2. **Train + persist a logreg attribution artifact** so S.2 can promote — operator runs `train_logreg_attributor` against a representative candidate pool (synthetic until a labelled corpus exists).
-3. **Per-mine back-fill of O.1 truck-geometry** for the Los Pelambres fleet — populate `empty_weight_tonnes`, `tire_count`, etc. from Komatsu / Cat datasheets per `docs/training-features.md`.
-4. **Phase X (proposed)** — promote the shared multi-station GBM to current. Currently `dust_forecast_gbm_v0.1.0` (per-station) is current; the shared variant beats it on per-receptor MAE for every station including the noisiest. Wire decide_promotion to compare versions.
-5. **Phase Y (proposed)** — class-imbalance mitigation for the breach classifier (Las Condes recall=0.0 is the tell). Options: class-weighted loss, lower decision threshold, focal loss. Also revisit the breach-decision threshold (currently 0.5) per receptor.
-6. **Antofagasta partnership conversation** — same blocker as last session. Real `ActionOutcome` rows would unlock R.2 / U.2 calibration mode, S.2 outcome-supervised training, and Phase O proper bias work.
+1. **Run the dev DB forward through the new lifespan**: `python -m uvicorn app.api.main:app` and confirm `maybe_promote_gbm_shared()` fires (or holds with the right reasons). New columns require `python scripts/migrate_intervention_target_classes.py` and `python scripts/migrate_intervention_resource_classes.py` first.
+2. **Retrain forecaster with `class_weight="balanced"` (Phase Y)**: trigger via the Phase W retrain endpoint, then check the new `model_performance_metrics` row's per-receptor `breach_recall` against the pre-Y baseline.
+3. **Wire the AD joint endpoint** (`POST /api/v1/recommendations/joint`) — solver is shipped, route is the load-bearing follow-up if multi-zone correlated breaches start showing up in the dev data.
+4. **Wire multi-horizon forecast track** — replace `synthesize_flat_track` with calls to per-horizon GBM artifacts once those are trained. Phase AC's mechanism is already in place; the input stream is the gap.
+5. **Antofagasta partnership** — same blocker. Real `ActionOutcome` rows would unlock R.2/U.2/S.2 calibration AND the AE.0 non-synthetic verdict that gates Phase AE.
 
 ---
 
-## Key references (T → W block)
+## Key references (X → AE.0 block)
 
-- **[app/domain/training_scheduler.py](app/domain/training_scheduler.py)** — W.1 weekly retrain wiring
-- **[app/domain/drift_response.py](app/domain/drift_response.py)** — W.2 drift-triggered retrain
-- **[app/api/routes/drift_retrain.py](app/api/routes/drift_retrain.py)** — `POST /api/v1/drift/retrain` admin-only
-- **[app/domain/cost_promotion.py](app/domain/cost_promotion.py)** — U.2 cost auto-promotion via sanity band
-- **[app/models/cost/cycle_time_v0_1_0.py](app/models/cost/cycle_time_v0_1_0.py)** — U.1 physics-informed cost
-- **[app/domain/production_cost_physics.py](app/domain/production_cost_physics.py)** — U.1 pure-function physics
-- **[web/src/components/PerReceptorTable.tsx](web/src/components/PerReceptorTable.tsx)** — T.1
-- **[web/src/components/MultiStationCaveats.tsx](web/src/components/MultiStationCaveats.tsx)** — T.2
-- **[web/src/components/EvidenceDistribution.tsx](web/src/components/EvidenceDistribution.tsx)** — T.3
-- **[tests/integration/test_recommendation_with_real_models.py](tests/integration/test_recommendation_with_real_models.py)** — V.1
-- **[tests/domain/test_audit_model_version_consistency.py](tests/domain/test_audit_model_version_consistency.py)** — V.2
-- **[tests/domain/test_confidence_propagation.py](tests/domain/test_confidence_propagation.py)** — V.3
+- **[app/domain/dust_forecast_promotion.py](app/domain/dust_forecast_promotion.py)** — X `maybe_promote_gbm_shared`
+- **[app/training/dust_forecast_training.py](app/training/dust_forecast_training.py)** — X `decide_shared_promotion`, Y `class_weight="balanced"`
+- **[app/storage/models/interventions.py](app/storage/models/interventions.py)** — Z `target_cause_classes`, AD `resource_classes`
+- **[app/domain/interventions.py](app/domain/interventions.py)** — Z + AD seed defaults
+- **[app/domain/shift_progress.py](app/domain/shift_progress.py)** — AA live + synthetic shift progress
+- **[app/domain/risk_classification.py](app/domain/risk_classification.py)** — AB `derive_risk_class`
+- **[app/domain/temporal_trigger.py](app/domain/temporal_trigger.py)** — AC `decide_trigger_time`
+- **[app/domain/joint_optimization.py](app/domain/joint_optimization.py)** — AD `solve_joint_recommendations`
+- **[app/domain/continuous_knob_spike.py](app/domain/continuous_knob_spike.py)** — AE.0 `measure_lift`
+- **[app/models/optimization/heuristic_baseline.py](app/models/optimization/heuristic_baseline.py)** — central wiring; reads all of the above
+- **[app/domain/recommendations.py](app/domain/recommendations.py)** — orchestrator threads attribution / shift_progress / forecast track into the ranker
+- **[scripts/spike_continuous_knobs.py](scripts/spike_continuous_knobs.py)** — AE.0 runner
+- **[docs/phase-ae0-spike.md](docs/phase-ae0-spike.md)** — AE.0 methodology + verdict thresholds
+- **[docs/bias-register.md](docs/bias-register.md)** — B-8 / B-46 / B-47 entries
 
 ## Earlier-phase references (still current)
 
-- **[app/training/dust_forecast_training.py](app/training/dust_forecast_training.py)** — P.1/P.2/Q.1/Q.2 trainer
+- **[app/domain/training_scheduler.py](app/domain/training_scheduler.py)** — W.1 weekly retrain
+- **[app/domain/drift_response.py](app/domain/drift_response.py)** — W.2 drift-triggered retrain
+- **[app/domain/cost_promotion.py](app/domain/cost_promotion.py)** — U.2 cost auto-promotion
+- **[app/models/cost/cycle_time_v0_1_0.py](app/models/cost/cycle_time_v0_1_0.py)** — U.1 physics-informed cost
 - **[app/models/forecasting/gbm_v0_1_0.py](app/models/forecasting/gbm_v0_1_0.py)** — per-station GBM
 - **[app/models/forecasting/gbm_shared_v0_1_0.py](app/models/forecasting/gbm_shared_v0_1_0.py)** — shared multi-station GBM
-- **[app/domain/dust_forecast_promotion.py](app/domain/dust_forecast_promotion.py)** — P.3 forecast promotion
-- **[app/domain/intervention_promotion.py](app/domain/intervention_promotion.py)** — R.2 intervention promotion
-- **[app/domain/attribution_promotion.py](app/domain/attribution_promotion.py)** — S.2 attribution promotion
-- **[app/models/intervention/ap42_v0_1_0.py](app/models/intervention/ap42_v0_1_0.py)** — AP-42 model
-- **[app/domain/ap42_emission.py](app/domain/ap42_emission.py)** — AP-42 physics
-- **[app/models/attribution/logreg_v0_1_0.py](app/models/attribution/logreg_v0_1_0.py)** — logreg attribution
-- **[app/domain/model_performance.py](app/domain/model_performance.py)** — M.4 metric_payload + Q.3 caveats
+- **[app/domain/dust_forecast_promotion.py](app/domain/dust_forecast_promotion.py)** — P.3 + X promotion
 - **[docs/forecast-model-protocol.md](docs/forecast-model-protocol.md)** — P.1+ binding contract
 - **[docs/intervention-physics.md](docs/intervention-physics.md)** — R.1+/U.1+ binding contract
-- **[docs/bias-register.md](docs/bias-register.md)** — 8 numbered biases now Mitigated
