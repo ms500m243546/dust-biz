@@ -33,6 +33,7 @@ from app.api.routes import (
     haul_road_segments,
     health,
     interventions,
+    joint_recommendations,
     meta,
     mine_state,
     model_performance,
@@ -162,6 +163,9 @@ def create_app() -> FastAPI:
     fastapi_app.include_router(interventions.router, prefix=API_PREFIX, dependencies=auth_dep)
     fastapi_app.include_router(simulations.router, prefix=API_PREFIX, dependencies=auth_dep)
     fastapi_app.include_router(recommendations.router, prefix=API_PREFIX, dependencies=auth_dep)
+    fastapi_app.include_router(
+        joint_recommendations.router, prefix=API_PREFIX, dependencies=auth_dep,
+    )
     fastapi_app.include_router(approvals.router, prefix=API_PREFIX, dependencies=auth_dep)
     fastapi_app.include_router(outcomes.router, prefix=API_PREFIX, dependencies=auth_dep)
     fastapi_app.include_router(training_data.router, prefix=API_PREFIX, dependencies=auth_dep)

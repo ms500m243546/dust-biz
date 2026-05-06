@@ -30,6 +30,10 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.domain.dispersion_intervention import (
+    apply_dispersion_uplift,
+    compute_dispersion_uplift,
+)
 from app.domain.interventions import (
     UnknownInterventionError,
     require_known,
@@ -121,6 +125,15 @@ def simulate_intervention(
         predicted_pm25=forecast.predicted_pm25,
         breach_probability_before=forecast.breach_probability,
     )
+    # Phase BA.9 / BD.2 — dispersion-aware uplift on the impact's
+    # reduction + breach delta when a CFD lookup model is current.
+    impact = _apply_dispersion_uplift_to_impact(
+        session=session,
+        impact=impact,
+        mine_id=zone.mine_id,
+        receptor_id=forecast.target_id,
+        as_of=forecast.issued_at,
+    )
     cost: ProductionCostEstimateSchema = cost_model.estimate_cost(
         intervention=intervention,
         target_zone_id=target_zone_id,
@@ -201,6 +214,38 @@ def simulate_do_nothing(
     )
     _persist(session, schema)
     return schema
+
+
+def _apply_dispersion_uplift_to_impact(
+    *,
+    session: Session,
+    impact: InterventionImpactSchema,
+    mine_id: str,
+    receptor_id: str,
+    as_of: datetime,
+) -> InterventionImpactSchema:
+    """Post-multiply the impact reduction + breach delta by the uplift.
+
+    Returns the impact unchanged when no CFD dispersion model is
+    promoted; otherwise scales `predicted_pm10_reduction` and
+    `breach_probability_after_action` (toward the before-value) by
+    the clamped multiplier.
+    """
+    uplift = compute_dispersion_uplift(
+        session, mine_id=mine_id, receptor_id=receptor_id, as_of=as_of,
+    )
+    if uplift is None:
+        return impact
+    new_red, new_after = apply_dispersion_uplift(
+        predicted_pm10_reduction=impact.predicted_pm10_reduction,
+        breach_probability_before=impact.breach_probability_before,
+        breach_probability_after=impact.breach_probability_after_action,
+        uplift=uplift,
+    )
+    return impact.model_copy(update={
+        "predicted_pm10_reduction": round(new_red, 3),
+        "breach_probability_after_action": round(new_after, 4),
+    })
 
 
 def _latest_forecast_for_zone(session: Session, zone_id: str) -> Any:

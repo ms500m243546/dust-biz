@@ -38,6 +38,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.domain.dispersion_attribution import resolve_cause_class_via_dispersion
 from app.domain.interventions import seed_default_interventions
 from app.domain.shift_progress import compute_shift_progress
 from app.domain.simulation import (
@@ -134,6 +135,18 @@ def generate_recommendation(
 
     attribution_row = _latest_attribution_for_forecast(session, forecast)
     cause_class = _resolve_cause_class(session, attribution_row)
+    # Phase BA.8 / BD.1 — when a CFD-derived dispersion model is
+    # `current`, override with the source whose CFD footprint dominates
+    # the affected receptor under current wind. Falls through silently
+    # to the attribution-engine result when no dispersion data exists.
+    dispersion_class = resolve_cause_class_via_dispersion(
+        session,
+        mine_id=zone.mine_id,
+        receptor_id=forecast.target_id,
+        as_of=forecast.issued_at,
+    )
+    if dispersion_class is not None:
+        cause_class = dispersion_class
 
     shift_progress = compute_shift_progress(
         session=session,

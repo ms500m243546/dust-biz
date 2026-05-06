@@ -76,10 +76,13 @@ def test_promote_flips_current_when_matrix_present(
         mine_id="ba10-mine",
         model_version=CFD_LOOKUP_VERSION,
         regime_grid=RegimeGridSchema(
-            directions_deg=[0.0, 90.0], speeds_ms=[3.0, 6.0]
+            directions_deg=[0.0, 90.0, 180.0, 270.0], speeds_ms=[5.0]
         ),
+        # MIN_REGIMES = 4 in the BD.3 calibration probe; populate all
+        # four so the structural sanity check passes.
         coefficients={
-            "dir00_speed00_neutral": {"src": {"rec": 0.4}},
+            f"dir{i:02d}_speed00_neutral": {"src": {"rec": 0.4}}
+            for i in range(4)
         },
     )
     session.add(Mine(mine_id="ba10-mine", name="BA10 mine", default_automation_level="L1"))

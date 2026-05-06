@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import logging
 
+from app.domain.dispersion_calibration import decide_dispersion_promotion
 from app.models import registry
 from app.models.dispersion.cfd_lookup_v0_1_0 import (
     CFD_LOOKUP_VERSION,
@@ -74,12 +75,22 @@ def maybe_promote_cfd_lookup(
                 pilot_mine_id,
             )
             return False
+        # Phase BA.7 / BD.3 — sanity-band probe gates promotion. Deferred
+        # mode (no observed-receptor PM10 history) accepts on structural
+        # sanity; calibrated mode awaits >= 2 receptors x >= 100 obs.
+        decision = decide_dispersion_promotion(matrix)
+        if not decision.passed:
+            logger.info(
+                "cfd_lookup promotion held by calibration probe (mode=%s): %s",
+                decision.mode, "; ".join(decision.reasons),
+            )
+            return False
         model = CFDLookupDispersionModel(matrix=matrix, model_version=CFD_LOOKUP_VERSION)
         registry.register(model, set_as_current=False)
         registry.set_current("dispersion", CFD_LOOKUP_VERSION)
         logger.info(
-            "cfd_lookup promoted to current for mine_id=%s (matrix_id=%s)",
-            pilot_mine_id, matrix.matrix_id,
+            "cfd_lookup promoted to current for mine_id=%s (matrix_id=%s, mode=%s)",
+            pilot_mine_id, matrix.matrix_id, decision.mode,
         )
         return True
     except Exception as exc:  # broad: bootstrap must never raise
