@@ -1,0 +1,10 @@
+# Force LF line endings for shell scripts and OpenFOAM dictionary
+# files. These are consumed by bash inside WSL; CRLF makes bash
+# choke on the shebang ('/bin/bash\r: bad interpreter') and
+# OpenFOAM's dictionary parser is similarly LF-only.
+*.sh text eol=lf
+cfd/**/Allmesh text eol=lf
+cfd/**/Allrun text eol=lf
+cfd/**/template/0/* text eol=lf
+cfd/**/template/constant/* text eol=lf
+cfd/**/template/system/* text eol=lf

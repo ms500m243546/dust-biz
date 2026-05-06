@@ -4,6 +4,20 @@
 
 set -euo pipefail
 
+# Source OpenFOAM v2312 environment. Login shells (bash -lc) read
+# ~/.profile, not ~/.bashrc, so we can't rely on the user's bashrc
+# entry — source explicitly here. Override OPENFOAM_BASHRC in the
+# environment for non-default install paths.
+: "${OPENFOAM_BASHRC:=/usr/lib/openfoam/openfoam2312/etc/bashrc}"
+if [[ -f "$OPENFOAM_BASHRC" ]]; then
+    # shellcheck disable=SC1090
+    source "$OPENFOAM_BASHRC"
+else
+    echo "ERROR: OpenFOAM bashrc not found at $OPENFOAM_BASHRC" >&2
+    echo "Set OPENFOAM_BASHRC to your install's etc/bashrc, or apt install openfoam2312-default." >&2
+    exit 127
+fi
+
 cd "$(dirname "$0")"
 
 if [[ ! -f constant/triSurface/terrain.stl ]]; then

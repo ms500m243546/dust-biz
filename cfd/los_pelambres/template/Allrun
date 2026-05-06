@@ -5,6 +5,16 @@
 
 set -euo pipefail
 
+# Same env-source as Allmesh; bash -lc doesn't read ~/.bashrc.
+: "${OPENFOAM_BASHRC:=/usr/lib/openfoam/openfoam2312/etc/bashrc}"
+if [[ -f "$OPENFOAM_BASHRC" ]]; then
+    # shellcheck disable=SC1090
+    source "$OPENFOAM_BASHRC"
+else
+    echo "ERROR: OpenFOAM bashrc not found at $OPENFOAM_BASHRC" >&2
+    exit 127
+fi
+
 cd "$(dirname "$0")"
 
 if [[ ! -d constant/polyMesh ]]; then
