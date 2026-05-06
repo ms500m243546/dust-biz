@@ -3,17 +3,18 @@
 # Produces postProcessing/cloudInfo/<time>/<receptor>.dat and
 # the final time-step field directory used for source-receptor extraction.
 
-set -euo pipefail
-
-# Same env-source as Allmesh; bash -lc doesn't read ~/.bashrc.
+# Source OpenFOAM env BEFORE enabling strict mode (the vendor bashrc
+# has internal `[ ... ]` tests that abort under `set -e`).
 : "${OPENFOAM_BASHRC:=/usr/lib/openfoam/openfoam2312/etc/bashrc}"
-if [[ -f "$OPENFOAM_BASHRC" ]]; then
-    # shellcheck disable=SC1090
-    source "$OPENFOAM_BASHRC"
-else
+if [[ ! -f "$OPENFOAM_BASHRC" ]]; then
     echo "ERROR: OpenFOAM bashrc not found at $OPENFOAM_BASHRC" >&2
     exit 127
 fi
+# shellcheck disable=SC1090
+source "$OPENFOAM_BASHRC"
+
+set -e
+set -o pipefail
 
 cd "$(dirname "$0")"
 

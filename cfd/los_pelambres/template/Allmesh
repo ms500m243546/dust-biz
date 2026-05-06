@@ -2,21 +2,25 @@
 # Phase BA.3 - generate the mesh once per case directory.
 # Run BEFORE Allrun. Produces constant/polyMesh/.
 
-set -euo pipefail
-
-# Source OpenFOAM v2312 environment. Login shells (bash -lc) read
-# ~/.profile, not ~/.bashrc, so we can't rely on the user's bashrc
-# entry — source explicitly here. Override OPENFOAM_BASHRC in the
-# environment for non-default install paths.
+# Source the OpenFOAM env BEFORE enabling strict mode. Both `-e` and
+# `-u` are too strict around vendor scripts: `-e` aborts on the first
+# `[ -z "$VAR" ]` test that returns non-zero (which OpenFOAM's bashrc
+# uses freely), and `-u` aborts on any read of an unset var. Login
+# shells (bash -lc) don't auto-source ~/.bashrc; the user's bashrc
+# line for OpenFOAM is invisible to us. Override OPENFOAM_BASHRC in
+# the environment for non-default install paths.
 : "${OPENFOAM_BASHRC:=/usr/lib/openfoam/openfoam2312/etc/bashrc}"
-if [[ -f "$OPENFOAM_BASHRC" ]]; then
-    # shellcheck disable=SC1090
-    source "$OPENFOAM_BASHRC"
-else
+if [[ ! -f "$OPENFOAM_BASHRC" ]]; then
     echo "ERROR: OpenFOAM bashrc not found at $OPENFOAM_BASHRC" >&2
-    echo "Set OPENFOAM_BASHRC to your install's etc/bashrc, or apt install openfoam2312-default." >&2
+    echo "Set OPENFOAM_BASHRC, or apt install openfoam2312-default." >&2
     exit 127
 fi
+# shellcheck disable=SC1090
+source "$OPENFOAM_BASHRC"
+
+# Now lock in the strict mode for the actual mesh commands.
+set -e
+set -o pipefail
 
 cd "$(dirname "$0")"
 
