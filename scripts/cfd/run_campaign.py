@@ -178,9 +178,14 @@ def stage_run_dir(
     smoke run; the case will mesh and solve but produce no particle
     statistics.
     """
-    if run_dir.exists():
-        shutil.rmtree(run_dir)
-    shutil.copytree(template_dir, run_dir)
+    # Idempotent overlay: copy template files in place. dirs_exist_ok
+    # avoids the wipe-and-recreate path that races against AV /
+    # OneDrive holding an open handle on terrain.stl. Stale files
+    # written by a prior run for OTHER regimes are not re-written
+    # here, but per-regime placeholder files (0/U etc.) ARE
+    # overwritten below with regime-specific values.
+    run_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(template_dir, run_dir, dirs_exist_ok=True)
 
     ux, uy, uz = regime.inlet_vector()
     k, eps = regime.inlet_turbulence()

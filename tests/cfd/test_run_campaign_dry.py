@@ -126,19 +126,50 @@ def test_stage_run_dir_replaces_placeholders(tmp_path: Path) -> None:
     assert regime_json["regime_id"] == "t"
 
 
-def test_stage_run_dir_overwrites_existing(tmp_path: Path) -> None:
+def test_stage_run_dir_overlays_existing(tmp_path: Path) -> None:
+    """Idempotency contract: re-running stage_run_dir on an existing
+    run_dir must overlay template files (so placeholder values are
+    re-patched) without wiping the directory. Stale per-regime files
+    (e.g. a prior failed run's results.json) may persist; they don't
+    interfere because placeholder-driven files are always re-written."""
     template = tmp_path / "template"
     template.mkdir()
-    (template / "marker.txt").write_text("v2")
+    (template / "marker.txt").write_text("from_template")
     target = tmp_path / "runs" / "t"
     target.mkdir(parents=True)
-    (target / "stale.txt").write_text("v1")
+    # Pre-existing stale file from a hypothetical prior run.
+    (target / "stale.txt").write_text("prior_run")
     regime = Regime("t", direction_deg=0.0, speed_ms=5.0, stability="neutral")
     stage_run_dir(
         template_dir=template, run_dir=target, regime=regime,
     )
-    assert (target / "marker.txt").exists()
-    assert not (target / "stale.txt").exists()
+    # Template was overlaid.
+    assert (target / "marker.txt").read_text() == "from_template"
+    # Stale file persists — the overlay does NOT wipe. This is
+    # intentional: avoids racing AV / OneDrive locks on freshly-
+    # copied large files like terrain.stl.
+    assert (target / "stale.txt").exists()
+
+
+def test_stage_run_dir_re_patches_placeholders_on_rerun(tmp_path: Path) -> None:
+    """Idempotency contract: a second run with a different regime
+    overwrites the placeholder-driven files with the new regime's
+    values. Without this, a re-run would silently keep stale BCs."""
+    template = tmp_path / "template"
+    (template / "0").mkdir(parents=True)
+    (template / "0/U").write_text("uniform (__INLET_UX__ __INLET_UY__ __INLET_UZ__);")
+    target = tmp_path / "runs" / "t"
+    r1 = Regime("t", direction_deg=0.0, speed_ms=5.0, stability="neutral")
+    stage_run_dir(template_dir=template, run_dir=target, regime=r1)
+    first = (target / "0/U").read_text()
+
+    r2 = Regime("t", direction_deg=180.0, speed_ms=8.0, stability="neutral")
+    stage_run_dir(template_dir=template, run_dir=target, regime=r2)
+    second = (target / "0/U").read_text()
+
+    assert first != second
+    # Wind FROM south (180): Ux=0, Uy positive (8 m/s northward).
+    assert "8.000000" in second
 
 
 def test_windows_to_wsl_path_drive_letter() -> None:
