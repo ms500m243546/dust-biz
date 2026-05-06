@@ -58,3 +58,9 @@ logs/
 
 # Phase L: ingest disk cache (raw API responses + parquet snapshots)
 data_cache/
+
+# Phase BA — campaign runtime artifacts (operator-side only)
+campaign.log
+campaign.err
+campaign.pid
+check_campaign.ps1
