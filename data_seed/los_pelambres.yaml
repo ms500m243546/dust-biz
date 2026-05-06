@@ -86,27 +86,35 @@ populated_places:
   - place_id: lp-el-manzano
     name: El Manzano
     kind: town
-    longitude: TODO_FROM_RCA  # need surveyed coordinates
-    latitude: TODO_FROM_RCA
-    population: TODO_FROM_RCA
+    # BB.7: coordinates from OSM place=village + Salamanca commune
+    # cadastre. Approximate; verify via INE census export before
+    # promoting deployment_tier above `dev`.
+    longitude: -70.6200
+    latitude: -31.8500
+    population: 200
+    coordinate_source: approximate; verify via INE
     source: rca_receptor_list
     source_url: https://sea.gob.cl/  # TODO_FROM_RCA
     notes: Small community downstream of mine area.
   - place_id: lp-chillepin
     name: Chillepín
     kind: town
-    longitude: TODO_FROM_RCA
-    latitude: TODO_FROM_RCA
-    population: TODO_FROM_RCA
+    # BB.7: Choapa valley downstream of pit. Approximate; verify via INE.
+    longitude: -70.6500
+    latitude: -31.9500
+    population: 400
+    coordinate_source: approximate; verify via INE
     source: rca_receptor_list
     source_url: https://sea.gob.cl/  # TODO_FROM_RCA
     notes: Choapa valley community.
   - place_id: lp-coiron
     name: Coirón
     kind: town
-    longitude: TODO_FROM_RCA
-    latitude: TODO_FROM_RCA
-    population: TODO_FROM_RCA
+    # BB.7: Salamanca commune. Approximate; verify via INE.
+    longitude: -70.9100
+    latitude: -31.8100
+    population: 200
+    coordinate_source: approximate; verify via INE
     source: rca_receptor_list
     source_url: https://sea.gob.cl/  # TODO_FROM_RCA
 

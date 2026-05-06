@@ -44,6 +44,7 @@ PLACEHOLDER_FILES: tuple[str, ...] = (
     "0/k",
     "0/epsilon",
     "constant/cloudProperties",
+    "system/topoSetDict",
 )
 
 
@@ -167,6 +168,7 @@ def stage_run_dir(
     regime: Regime,
     injection_sites: str = "",
     receptor_samplers: str = "",
+    receptor_cellzones: str = "",
 ) -> None:
     """Copy template to run_dir + patch all known placeholders in-place.
 
@@ -190,6 +192,7 @@ def stage_run_dir(
         "__INLET_EPS__": f"{eps:.6e}",
         "__PARTICLE_INJECTION_SITES__": injection_sites,
         "__RECEPTOR_SAMPLERS__": receptor_samplers,
+        "__RECEPTOR_CELLZONES__": receptor_cellzones,
     }
     for rel in PLACEHOLDER_FILES:
         path = run_dir / rel
@@ -268,6 +271,11 @@ def main(argv: Iterable[str] | None = None) -> int:
         "--receptor-samplers",
         help="Path to a pre-rendered OpenFOAM receptor-samplers block.",
     )
+    parser.add_argument(
+        "--receptor-cellzones",
+        help="Path to a pre-rendered topoSetDict cellzones block "
+             "(replaces __RECEPTOR_CELLZONES__ in system/topoSetDict).",
+    )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument(
         "--dry-run", action="store_true", default=True,
@@ -313,6 +321,11 @@ def main(argv: Iterable[str] | None = None) -> int:
         if args.receptor_samplers
         else ""
     )
+    receptor_cellzones = (
+        Path(args.receptor_cellzones).read_text(encoding="utf-8")
+        if args.receptor_cellzones
+        else ""
+    )
 
     failed: list[str] = []
     for i, regime in enumerate(regimes):
@@ -324,6 +337,7 @@ def main(argv: Iterable[str] | None = None) -> int:
             regime=regime,
             injection_sites=injection_sites,
             receptor_samplers=receptor_samplers,
+            receptor_cellzones=receptor_cellzones,
         )
         if args.execute:
             mesh = (not args.mesh_once) or (i == 0)

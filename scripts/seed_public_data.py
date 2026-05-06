@@ -87,7 +87,14 @@ from app.ingestion.public.sinca import (  # noqa: E402,I001
     to_raw_sensor_payload,
 )
 from app.storage.database import get_engine, session_scope  # noqa: E402,I001
-from app.storage.models import Base, SensorReading, WeatherReading  # noqa: E402,I001
+from app.storage.models import (  # noqa: E402,I001
+    Base,
+    HaulRoadSegment,
+    Mine,
+    SensorReading,
+    WeatherReading,
+    Zone,
+)
 
 
 def _parse_date(s: str) -> datetime:
@@ -775,12 +782,119 @@ def cmd_era5_from_payload(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_osm_from_cache(args: argparse.Namespace) -> int:
+    """Phase BC.2 — upsert OSM zones + haul-road segments from cache.
+
+    Reads `data_cache/osm/<mine_id>.parsed.json` (produced by
+    `scripts/data_pull/fetch_osm_mine.py`) and upserts each entry into
+    `zones` + `haul_road_segments`. Idempotent on `zone_id` /
+    `segment_id` (both prefixed with the mine ID by the parser).
+
+    The mine row must already exist; this command does NOT seed
+    `mines` rows (they come from the data_seed YAML loader).
+    """
+    if not args.mine_id:
+        print("ERROR: --mine-id is required for --source osm", file=sys.stderr)
+        return 2
+
+    parsed_path = Path(args.cache_dir) / "osm" / f"{args.mine_id}.parsed.json"
+    if not parsed_path.exists():
+        print(
+            f"ERROR: parsed OSM JSON not found at {parsed_path}; "
+            "run scripts/data_pull/fetch_osm_mine.py first",
+            file=sys.stderr,
+        )
+        return 1
+
+    payload = json.loads(parsed_path.read_text(encoding="utf-8"))
+    zones_in = payload.get("zones") or []
+    haul_in = payload.get("haul_roads") or []
+
+    if args.no_persist:
+        print(
+            f"OSM cache for {args.mine_id}: {len(zones_in)} zones + "
+            f"{len(haul_in)} haul roads (--no-persist; nothing written)"
+        )
+        return 0
+
+    inserted_z = 0
+    updated_z = 0
+    inserted_h = 0
+    updated_h = 0
+    with session_scope() as s:
+        if s.get(Mine, args.mine_id) is None:
+            print(
+                f"ERROR: mine_id={args.mine_id!r} not in `mines`; seed it first",
+                file=sys.stderr,
+            )
+            return 1
+
+        for z in zones_in:
+            zid = z.get("zone_id")
+            if not isinstance(zid, str):
+                continue
+            existing = s.get(Zone, zid)
+            if existing is None:
+                s.add(
+                    Zone(
+                        zone_id=zid,
+                        mine_id=args.mine_id,
+                        zone_type=str(z.get("zone_type", "pit")),
+                        operational_importance=str(z.get("operational_importance", "high")),
+                        dust_generation_baseline=str(
+                            z.get("dust_generation_baseline", "high")
+                        ),
+                        geometry=z.get("geometry"),
+                    )
+                )
+                inserted_z += 1
+            else:
+                existing.geometry = z.get("geometry")
+                existing.zone_type = str(z.get("zone_type", existing.zone_type))
+                updated_z += 1
+
+        for h in haul_in:
+            sid = h.get("segment_id")
+            if not isinstance(sid, str):
+                continue
+            existing_h = s.get(HaulRoadSegment, sid)
+            length_m = float(h.get("length_m") or 0.0)
+            if existing_h is None:
+                s.add(
+                    HaulRoadSegment(
+                        segment_id=sid,
+                        mine_id=args.mine_id,
+                        from_node=str(h.get("from_node", "unknown")),
+                        to_node=str(h.get("to_node", "unknown")),
+                        length_m=length_m,
+                        surface_type=str(h.get("surface_type", "unknown")),
+                        geometry=h.get("geometry"),
+                    )
+                )
+                inserted_h += 1
+            else:
+                existing_h.length_m = length_m
+                existing_h.geometry = h.get("geometry")
+                existing_h.surface_type = str(
+                    h.get("surface_type", existing_h.surface_type)
+                )
+                updated_h += 1
+        s.flush()
+
+    print(
+        f"OSM upsert for {args.mine_id}: "
+        f"zones inserted={inserted_z} updated={updated_z}; "
+        f"haul-road segments inserted={inserted_h} updated={updated_h}"
+    )
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--source",
         default="sinca",
-        choices=["sinca", "open_meteo", "era5"],
+        choices=["sinca", "open_meteo", "era5", "osm"],
     )
     parser.add_argument("--station", required=False, help="SINCA station code")
     parser.add_argument("--station-name", default=None)
@@ -890,6 +1004,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_open_meteo(args)
     if args.source == "era5":
         return cmd_era5_from_payload(args)
+    if args.source == "osm":
+        return cmd_osm_from_cache(args)
     parser.error(f"unsupported source: {args.source}")
     return 2  # unreachable; satisfies type checker
 

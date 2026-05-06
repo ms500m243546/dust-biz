@@ -15,4 +15,5 @@ FoamFile
 
 actions
 (
+__RECEPTOR_CELLZONES__
 );
